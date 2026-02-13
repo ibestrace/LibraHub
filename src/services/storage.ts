@@ -592,12 +592,22 @@ export class BorrowService {
     
     StorageService.set(STORAGE_KEYS.BORROW_RECORDS, records);
     
-    // 更新书籍状态
+    // 更新书籍库存状态
     const book = BookService.getById(record.bookId);
     if (book) {
+      const newAvailableStock = book.availableStock + 1;
+      // 智能更新书籍状态：
+      // 1. 如果书籍状态是正常可借状态，保持不变
+      // 2. 如果书籍状态是损坏、丢失、维修等，保持原状态
+      // 3. 只有在书籍状态为 'borrowed' 且之前库存为0时，才更新为 'available'
+      let newStatus = book.status;
+      if (book.status === 'borrowed' && book.availableStock === 0) {
+        newStatus = 'available' as BookStatus;
+      }
+      
       BookService.update(record.bookId, {
-        availableStock: book.availableStock + 1,
-        status: 'available' as BookStatus
+        availableStock: newAvailableStock,
+        status: newStatus
       });
     }
     
@@ -628,7 +638,10 @@ export class BorrowService {
     if (index === -1) throw new Error('借阅记录不存在');
     
     const record = records[index];
-    if (record.status !== 'borrowed') throw new Error('只能续借借阅中的书籍');
+    // 允许借阅中和已续借状态的书籍继续续借
+    if (record.status !== 'borrowed' && record.status !== 'renewed') {
+      throw new Error('只能续借借阅中的书籍');
+    }
     
     const member = MemberService.getById(record.memberId);
     if (!member) throw new Error('会员不存在');
