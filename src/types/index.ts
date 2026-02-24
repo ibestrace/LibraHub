@@ -68,6 +68,10 @@ export interface Member {
   currentBorrowCount: number;   // 当前借阅数量
   deposit?: number;             // 押金
   notes?: string;               // 备注
+  groupId?: string;             // 所属分组ID
+  totalReadingWords: number;    // 累计阅读字数
+  badges?: MemberBadge[];       // 个人获得的徽章
+  achievements?: Achievement[]; // 个人成就
   createdAt: string;
   updatedAt: string;
 }
@@ -107,6 +111,9 @@ export interface BorrowRecord {
   fineReason?: string;          // 罚款原因
   notes?: string;               // 备注
   operator: string;             // 操作员
+  wordCount?: number;           // 阅读字数（归还时记录）
+  readingYearMonth?: string;    // 阅读月份（归还时记录，格式：YYYY-MM）
+  wordCountInputAt?: string;    // 字数录入时间（如果归还时手动录入）
   createdAt: string;
   updatedAt: string;
 }
@@ -186,4 +193,112 @@ export interface BorrowSearchParams {
   status?: BorrowStatus;
   startDate?: string;
   endDate?: string;
+}
+
+// ========== 会员分组和阅读统计相关类型 ==========
+
+// 会员分组
+export interface MemberGroup {
+  id: string;
+  name: string;                 // 分组名称
+  description?: string;         // 分组描述
+  color?: string;               // 分组颜色标识
+  badges?: GroupBadge[];        // 分组获得的徽章
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 分组徽章
+export interface GroupBadge {
+  badgeId: string;              // 徽章ID
+  earnedAt: string;             // 获得时间
+  type: 'reading_milestone' | 'group_champion' | 'reading_star' | 'teamwork';
+  level?: 'bronze' | 'silver' | 'gold' | 'diamond';
+}
+
+// 会员徽章
+export interface MemberBadge {
+  badgeId: string;
+  badgeName: string;
+  description: string;
+  icon: string;                 // 图标标识
+  earnedAt: string;
+  category: 'reading' | 'persistence' | 'explorer' | 'speed';
+  level?: 'bronze' | 'silver' | 'gold' | 'diamond';
+}
+
+// 个人成就
+export interface Achievement {
+  id: string;
+  type: string;                 // 成就类型
+  name: string;                 // 成就名称
+  description: string;
+  progress: number;             // 当前进度
+  target: number;               // 目标值
+  completed: boolean;
+  completedAt?: string;
+}
+
+// 阅读统计记录
+export interface ReadingStats {
+  id: string;
+  memberId: string;
+  memberName: string;
+  groupId?: string;
+  yearMonth: string;            // 统计月份（YYYY-MM）
+  totalWords: number;           // 该月阅读字数
+  bookCount: number;            // 该月阅读书籍数
+  updatedAt: string;
+}
+
+// 徽章定义配置
+export interface BadgeDefinition {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: 'reading' | 'persistence' | 'explorer' | 'speed' | 'teamwork';
+  condition: {
+    type: 'total_words' | 'monthly_words' | 'books_count' | 'consecutive_months' | 'group_ranking';
+    value: number;
+  };
+  levels?: {
+    bronze: number;
+    silver: number;
+    gold: number;
+    diamond: number;
+  };
+}
+
+// 排行榜数据类型
+export interface TotalRankingItem {
+  rank: number;
+  memberId: string;
+  memberName: string;
+  groupId?: string;
+  groupName?: string;
+  totalWords: number;
+  bookCount: number;
+  badgeCount: number;
+}
+
+export interface GroupRankingItem {
+  rank: number;
+  groupId: string;
+  groupName: string;
+  totalWords: number;
+  memberCount: number;
+  avgWords: number;
+  badgeCount: number;
+}
+
+export interface MonthlyRankingItem {
+  rank: number;
+  memberId: string;
+  memberName: string;
+  groupId?: string;
+  groupName?: string;
+  monthlyWords: number;
+  monthlyBookCount: number;
+  rankChange?: number;          // 排名变化
 }

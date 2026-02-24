@@ -1,6 +1,7 @@
 // 数据存储服务 - 使用 localStorage 实现数据持久化
 // 可轻松迁移到 IndexedDB 或后端 API
 
+import { format } from 'date-fns';
 import type {
   Book,
   Member,
@@ -10,7 +11,9 @@ import type {
   OperationLog,
   SystemSettings,
   BookStatus,
-  BorrowStatus
+  BorrowStatus,
+  MemberGroup,
+  ReadingStats
 } from '@/types';
 
 // 存储键名
@@ -23,7 +26,9 @@ const STORAGE_KEYS = {
   CATEGORIES: 'library_categories',
   LOGS: 'library_logs',
   SETTINGS: 'library_settings',
-  OPERATORS: 'library_operators'
+  OPERATORS: 'library_operators',
+  MEMBER_GROUPS: 'library_member_groups',
+  READING_STATS: 'library_reading_stats'
 };
 
 // 通用存储操作
@@ -66,7 +71,9 @@ class StorageService {
       reservations: this.get(STORAGE_KEYS.RESERVATIONS, []),
       categories: this.get(STORAGE_KEYS.CATEGORIES, []),
       logs: this.get(STORAGE_KEYS.LOGS, []),
-      settings: this.get(STORAGE_KEYS.SETTINGS, {})
+      settings: this.get(STORAGE_KEYS.SETTINGS, {}),
+      memberGroups: this.get(STORAGE_KEYS.MEMBER_GROUPS, []),
+      readingStats: this.get(STORAGE_KEYS.READING_STATS, [])
     };
     return JSON.stringify(data, null, 2);
   }
@@ -83,6 +90,8 @@ class StorageService {
       if (data.categories) this.set(STORAGE_KEYS.CATEGORIES, data.categories);
       if (data.logs) this.set(STORAGE_KEYS.LOGS, data.logs);
       if (data.settings) this.set(STORAGE_KEYS.SETTINGS, data.settings);
+      if (data.memberGroups) this.set(STORAGE_KEYS.MEMBER_GROUPS, data.memberGroups);
+      if (data.readingStats) this.set(STORAGE_KEYS.READING_STATS, data.readingStats);
       return true;
     } catch (error) {
       console.error('Import error:', error);
@@ -282,7 +291,7 @@ export class MemberService {
     return members;
   }
 
-  static add(member: Omit<Member, 'id' | 'createdAt' | 'updatedAt' | 'currentBorrowCount'>): Member {
+  static add(member: Omit<Member, 'id' | 'createdAt' | 'updatedAt' | 'currentBorrowCount' | 'totalReadingWords'>): Member {
     const members = this.getAll();
     
     if (members.some(m => m.cardNumber === member.cardNumber)) {
@@ -291,8 +300,9 @@ export class MemberService {
     
     const newMember: Member = {
       ...member,
-      id: `member_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `member_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       currentBorrowCount: 0,
+      totalReadingWords: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -579,6 +589,11 @@ export class BorrowService {
     const record = records[index];
     const now = new Date().toISOString();
     
+    // 获取书籍信息
+    const book = BookService.getById(record.bookId);
+    const wordCount = book?.wordCount || 0;
+    const readingYearMonth = format(new Date(), 'yyyy-MM');
+    
     // 更新借阅记录
     records[index] = {
       ...record,
@@ -587,13 +602,15 @@ export class BorrowService {
       fineAmount,
       fineReason,
       operator,
+      wordCount,
+      readingYearMonth,
+      wordCountInputAt: wordCount > 0 ? now : undefined,
       updatedAt: now
     };
     
     StorageService.set(STORAGE_KEYS.BORROW_RECORDS, records);
     
     // 更新书籍库存状态
-    const book = BookService.getById(record.bookId);
     if (book) {
       const newAvailableStock = book.availableStock + 1;
       // 智能更新书籍状态：
@@ -611,17 +628,29 @@ export class BorrowService {
       });
     }
     
-    // 更新会员借阅数量
+    // 更新会员借阅数量和阅读字数
     const member = MemberService.getById(record.memberId);
     if (member) {
       MemberService.update(record.memberId, {
-        currentBorrowCount: Math.max(0, member.currentBorrowCount - 1)
+        currentBorrowCount: Math.max(0, member.currentBorrowCount - 1),
+        totalReadingWords: member.totalReadingWords + wordCount
       });
+      
+      // 更新阅读统计
+      if (wordCount > 0) {
+        ReadingStatsService.updateStats(
+          member.id,
+          member.name,
+          member.groupId,
+          readingYearMonth,
+          wordCount
+        );
+      }
     }
     
     LogService.add('return', '还书', record.id, record.bookTitle,
-      `会员 ${record.memberName} 归还《${record.bookTitle}》`);
-    
+      `会员 ${record.memberName} 归还《${record.bookTitle}》${wordCount > 0 ? `，阅读${wordCount}字` : ''}`);
+
     return records[index];
   }
 
@@ -830,6 +859,247 @@ export class SettingsService {
     const updated = { ...current, ...settings };
     StorageService.set(STORAGE_KEYS.SETTINGS, updated);
     return updated;
+  }
+}
+
+// 会员分组操作
+export class MemberGroupService {
+  static getAll(): MemberGroup[] {
+    return StorageService.get<MemberGroup[]>(STORAGE_KEYS.MEMBER_GROUPS, []);
+  }
+
+  static getById(id: string): MemberGroup | undefined {
+    const groups = this.getAll();
+    return groups.find(g => g.id === id);
+  }
+
+  static add(group: Omit<MemberGroup, 'id' | 'createdAt' | 'updatedAt'>): MemberGroup {
+    const groups = this.getAll();
+    
+    // 检查名称是否重复
+    if (groups.some(g => g.name === group.name)) {
+      throw new Error('分组名称已存在');
+    }
+    
+    const newGroup: MemberGroup = {
+      ...group,
+      id: `group_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    groups.push(newGroup);
+    StorageService.set(STORAGE_KEYS.MEMBER_GROUPS, groups);
+    
+    LogService.add('system', '创建分组', newGroup.id, newGroup.name);
+    return newGroup;
+  }
+
+  static update(id: string, updates: Partial<MemberGroup>): MemberGroup {
+    const groups = this.getAll();
+    const index = groups.findIndex(g => g.id === id);
+    
+    if (index === -1) throw new Error('分组不存在');
+    
+    // 检查名称是否重复
+    if (updates.name && updates.name !== groups[index].name) {
+      if (groups.some(g => g.name === updates.name)) {
+        throw new Error('分组名称已存在');
+      }
+    }
+    
+    groups[index] = {
+      ...groups[index],
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+    
+    StorageService.set(STORAGE_KEYS.MEMBER_GROUPS, groups);
+    LogService.add('system', '更新分组', id, groups[index].name);
+    
+    return groups[index];
+  }
+
+  static delete(id: string): boolean {
+    const groups = this.getAll();
+    const group = groups.find(g => g.id === id);
+    
+    if (!group) throw new Error('分组不存在');
+    
+    // 检查是否有会员在该分组
+    const members = MemberService.getAll();
+    if (members.some(m => m.groupId === id)) {
+      throw new Error('该分组下有会员，无法删除');
+    }
+    
+    const filtered = groups.filter(g => g.id !== id);
+    StorageService.set(STORAGE_KEYS.MEMBER_GROUPS, filtered);
+    
+    LogService.add('system', '删除分组', id, group.name);
+    return true;
+  }
+}
+
+// 阅读统计服务
+export class ReadingStatsService {
+  static getAll(): ReadingStats[] {
+    return StorageService.get<ReadingStats[]>(STORAGE_KEYS.READING_STATS, []);
+  }
+
+  static getByMember(memberId: string): ReadingStats[] {
+    return this.getAll().filter(s => s.memberId === memberId);
+  }
+
+  static getByMonth(yearMonth: string): ReadingStats[] {
+    return this.getAll().filter(s => s.yearMonth === yearMonth);
+  }
+
+  static getByGroup(groupId: string): ReadingStats[] {
+    return this.getAll().filter(s => s.groupId === groupId);
+  }
+
+  static updateStats(
+    memberId: string,
+    memberName: string,
+    groupId: string | undefined,
+    yearMonth: string,
+    wordCount: number
+  ): ReadingStats {
+    const stats = this.getAll();
+    const existingIndex = stats.findIndex(
+      s => s.memberId === memberId && s.yearMonth === yearMonth
+    );
+
+    if (existingIndex !== -1) {
+      // 更新现有记录
+      stats[existingIndex] = {
+        ...stats[existingIndex],
+        totalWords: stats[existingIndex].totalWords + wordCount,
+        bookCount: stats[existingIndex].bookCount + 1,
+        updatedAt: new Date().toISOString()
+      };
+    } else {
+      // 创建新记录
+      const newStat: ReadingStats = {
+        id: `stat_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        memberId,
+        memberName,
+        groupId,
+        yearMonth,
+        totalWords: wordCount,
+        bookCount: 1,
+        updatedAt: new Date().toISOString()
+      };
+      stats.push(newStat);
+    }
+
+    StorageService.set(STORAGE_KEYS.READING_STATS, stats);
+    return stats[existingIndex !== -1 ? existingIndex : stats.length - 1];
+  }
+
+  // 获取排行榜数据
+  static getTotalRanking(): Array<{
+    memberId: string;
+    memberName: string;
+    groupId?: string;
+    groupName?: string;
+    totalWords: number;
+    bookCount: number;
+  }> {
+    const members = MemberService.getAll();
+    const groups = MemberGroupService.getAll();
+
+    return members
+      .filter(m => m.totalReadingWords > 0)
+      .map(m => {
+        const group = m.groupId ? groups.find(g => g.id === m.groupId) : undefined;
+        const bookCount = this.getByMember(m.id).reduce((sum, s) => sum + s.bookCount, 0);
+        
+        return {
+          memberId: m.id,
+          memberName: m.name,
+          groupId: m.groupId,
+          groupName: group?.name || '未分组',
+          totalWords: m.totalReadingWords,
+          bookCount
+        };
+      })
+      .sort((a, b) => b.totalWords - a.totalWords);
+  }
+
+  static getGroupRanking(): Array<{
+    groupId: string;
+    groupName: string;
+    totalWords: number;
+    memberCount: number;
+    avgWords: number;
+  }> {
+    const groups = MemberGroupService.getAll();
+    const members = MemberService.getAll();
+
+    const groupStats = groups.map(group => {
+      const groupMembers = members.filter(m => m.groupId === group.id);
+      const totalWords = groupMembers.reduce((sum, m) => sum + m.totalReadingWords, 0);
+      const memberCount = groupMembers.length;
+      const avgWords = memberCount > 0 ? Math.round(totalWords / memberCount) : 0;
+
+      return {
+        groupId: group.id,
+        groupName: group.name,
+        totalWords,
+        memberCount,
+        avgWords
+      };
+    });
+
+    // 添加"未分组"统计
+    const ungroupedMembers = members.filter(m => !m.groupId);
+    if (ungroupedMembers.length > 0) {
+      const totalWords = ungroupedMembers.reduce((sum, m) => sum + m.totalReadingWords, 0);
+      groupStats.push({
+        groupId: 'ungrouped',
+        groupName: '未分组',
+        totalWords,
+        memberCount: ungroupedMembers.length,
+        avgWords: Math.round(totalWords / ungroupedMembers.length)
+      });
+    }
+
+    return groupStats.sort((a, b) => b.avgWords - a.avgWords);
+  }
+
+  static getMonthlyRanking(
+    yearMonth: string,
+    groupId?: string
+  ): Array<{
+    memberId: string;
+    memberName: string;
+    groupId?: string;
+    groupName?: string;
+    monthlyWords: number;
+    monthlyBookCount: number;
+  }> {
+    let stats = this.getByMonth(yearMonth);
+    
+    if (groupId) {
+      stats = stats.filter(s => s.groupId === groupId);
+    }
+
+    const groups = MemberGroupService.getAll();
+
+    return stats
+      .map(s => {
+        const group = s.groupId ? groups.find(g => g.id === s.groupId) : undefined;
+        return {
+          memberId: s.memberId,
+          memberName: s.memberName,
+          groupId: s.groupId,
+          groupName: group?.name || '未分组',
+          monthlyWords: s.totalWords,
+          monthlyBookCount: s.bookCount
+        };
+      })
+      .sort((a, b) => b.monthlyWords - a.monthlyWords);
   }
 }
 

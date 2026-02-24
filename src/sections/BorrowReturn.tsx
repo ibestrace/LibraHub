@@ -64,9 +64,12 @@ export default function BorrowReturn() {
   // 弹窗状态
   const [isReturnDialogOpen, setIsReturnDialogOpen] = useState(false);
   const [isRenewDialogOpen, setIsRenewDialogOpen] = useState(false);
+  const [isWordCountDialogOpen, setIsWordCountDialogOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<BorrowRecord | null>(null);
   const [fineAmount, setFineAmount] = useState(0);
   const [fineReason, setFineReason] = useState('');
+  const [wordCountInput, setWordCountInput] = useState<string>('');
+  const [pendingBook, setPendingBook] = useState<Book | null>(null);
 
   // 搜索
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -168,6 +171,21 @@ export default function BorrowReturn() {
   // 打开归还弹窗
   const openReturnDialog = (record: BorrowRecord) => {
     setSelectedRecord(record);
+    
+    // 获取书籍信息
+    const book = state.books.find(b => b.id === record.bookId);
+    
+    // 检查书籍是否有字数信息
+    if (book && !book.wordCount) {
+      // 没有字数信息，先录入字数
+      setPendingBook(book);
+      // 建议字数：页数 × 290字/页
+      const suggestedWordCount = book.pageCount ? Math.round(book.pageCount * 290) : 0;
+      setWordCountInput(suggestedWordCount.toString());
+      setIsWordCountDialogOpen(true);
+      return;
+    }
+    
     // 计算逾期罚款 - 使用系统设置的罚款金额
     const days = differenceInDays(new Date(), new Date(record.dueDate));
     const finePerDay = state.settings.overdueFinePerDay || 1;
@@ -179,6 +197,42 @@ export default function BorrowReturn() {
       setFineReason('');
     }
     setIsReturnDialogOpen(true);
+  };
+
+  // 确认录入字数
+  const handleWordCountSubmit = async () => {
+    if (!pendingBook || !selectedRecord) return;
+    
+    const wordCount = parseInt(wordCountInput);
+    if (!wordCount || wordCount <= 0) {
+      toast.error('请输入有效的字数');
+      return;
+    }
+    
+    try {
+      // 更新书籍字数信息
+      const { updateBook } = useLibrary();
+      await updateBook(pendingBook.id, { wordCount });
+      
+      toast.success('字数录入成功');
+      setIsWordCountDialogOpen(false);
+      setPendingBook(null);
+      setWordCountInput('');
+      
+      // 继续归还流程
+      const days = differenceInDays(new Date(), new Date(selectedRecord.dueDate));
+      const finePerDay = state.settings.overdueFinePerDay || 1;
+      if (days > 0) {
+        setFineAmount(days * finePerDay);
+        setFineReason(`逾期 ${days} 天`);
+      } else {
+        setFineAmount(0);
+        setFineReason('');
+      }
+      setIsReturnDialogOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '字数录入失败');
+    }
   };
 
   // 确认归还
@@ -488,6 +542,48 @@ export default function BorrowReturn() {
 
   return (
     <div className="space-y-4">
+      {/* 字数录入弹窗 */}
+      <Dialog open={isWordCountDialogOpen} onOpenChange={setIsWordCountDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>录入书籍字数</DialogTitle>
+          </DialogHeader>
+          {pendingBook && (
+            <div className="space-y-4 py-4">
+              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                <p><span className="text-gray-600">书名:</span> 《{pendingBook.title}》</p>
+                <p><span className="text-gray-600">作者:</span> {pendingBook.author}</p>
+                {pendingBook.pageCount && (
+                  <p><span className="text-gray-600">页数:</span> {pendingBook.pageCount}页</p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="wordCount">请输入书籍字数（必填）</Label>
+                <Input
+                  id="wordCount"
+                  type="number"
+                  value={wordCountInput}
+                  onChange={(e) => setWordCountInput(e.target.value)}
+                  placeholder="请输入字数"
+                />
+                {pendingBook.pageCount && (
+                  <p className="text-sm text-gray-500">
+                    参考计算：约290字/页 × {pendingBook.pageCount}页 ≈ {pendingBook.pageCount * 290}字
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsWordCountDialogOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleWordCountSubmit}>确认并继续归还</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* 视图切换 */}
       <div className="flex gap-2 flex-wrap">
         <Button

@@ -6,7 +6,9 @@ import {
   BarChart3, 
   Settings, 
   Menu,
-  Database
+  Database,
+  Trophy,
+  UsersRound
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -19,13 +21,17 @@ import MemberManagement from './MemberManagement';
 import BorrowReturn from './BorrowReturn';
 import DataManagement from './DataManagement';
 import SystemSettings from './SystemSettings';
+import MemberGroupManagement from './MemberGroupManagement';
+import ReadingRanking from './ReadingRanking';
 
 // 导航项
 const navItems = [
   { id: 'dashboard', label: '数据概览', icon: BarChart3 },
   { id: 'books', label: '书籍管理', icon: BookOpen },
   { id: 'members', label: '会员管理', icon: Users },
+  { id: 'groups', label: '分组管理', icon: UsersRound },
   { id: 'borrow', label: '借阅归还', icon: RotateCcw },
+  { id: 'ranking', label: '阅读排行', icon: Trophy },
   { id: 'data', label: '数据管理', icon: Database },
   { id: 'settings', label: '系统设置', icon: Settings },
 ];
@@ -43,8 +49,12 @@ export default function LibraryDashboard() {
         return <BookManagement />;
       case 'members':
         return <MemberManagement />;
+      case 'groups':
+        return <MemberGroupManagement />;
       case 'borrow':
         return <BorrowReturn />;
+      case 'ranking':
+        return <ReadingRanking />;
       case 'data':
         return <DataManagement />;
       case 'settings':
@@ -182,7 +192,9 @@ export default function LibraryDashboard() {
               {activeTab === 'dashboard' && '查看图书馆运营数据和统计信息'}
               {activeTab === 'books' && '管理图书馆的书籍信息和库存'}
               {activeTab === 'members' && '管理会员信息和借阅权限'}
+              {activeTab === 'groups' && '管理会员分组，便于统计和排行'}
               {activeTab === 'borrow' && '处理书籍借阅和归还操作'}
+              {activeTab === 'ranking' && '查看会员和分组的阅读字数排名'}
               {activeTab === 'data' && '备份和恢复系统数据'}
               {activeTab === 'settings' && '配置系统参数和图书馆信息'}
             </p>

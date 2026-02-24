@@ -1,12 +1,14 @@
 import { useLibrary } from '@/hooks/useLibrary';
-import { 
-  BookOpen, 
-  Users, 
-  RotateCcw, 
+import { useStorageMonitor } from '@/hooks/useStorageMonitor';
+import {
+  BookOpen,
+  Users,
+  RotateCcw,
   AlertCircle,
   TrendingUp,
   Clock,
-  CheckCircle
+  CheckCircle,
+  HardDrive
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
@@ -15,6 +17,15 @@ import { zhCN } from 'date-fns/locale';
 export default function DashboardOverview() {
   const { state } = useLibrary();
   const { statistics } = state;
+  const { 
+    stats, 
+    warning, 
+    formatSize, 
+    formatLimit,
+    getWarningColor,
+    getWarningIcon,
+    getWarningMessage,
+  } = useStorageMonitor();
 
   // 统计卡片数据
   const statCards = [
@@ -117,7 +128,7 @@ export default function DashboardOverview() {
               <div>
                 <p className="text-sm text-gray-500">当前时间</p>
                 <p className="font-medium text-gray-900">
-                  {format(new Date(), 'yyyy年MM月dd日 HH:mm', { locale: zhCN })}
+                  {format(new Date(), 'yyyy 年 MM 月 dd 日 HH:mm', { locale: zhCN })}
                 </p>
               </div>
             </div>
@@ -139,9 +150,65 @@ export default function DashboardOverview() {
                 <p className="font-medium text-gray-900">{state.settings.libraryName}</p>
               </div>
             </div>
+            {/* 存储监控 */}
+            {stats && (
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  warning === 'critical' ? 'bg-red-100' :
+                  warning === 'high' ? 'bg-orange-100' :
+                  warning === 'medium' ? 'bg-yellow-100' :
+                  warning === 'low' ? 'bg-blue-100' : 'bg-green-100'
+                }`}>
+                  <HardDrive className={`w-5 h-5 ${
+                    warning === 'critical' ? 'text-red-600' :
+                    warning === 'high' ? 'text-orange-600' :
+                    warning === 'medium' ? 'text-yellow-600' :
+                    warning === 'low' ? 'text-blue-600' : 'text-green-600'
+                  }`} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500">存储空间</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-gray-900">{formatSize(stats.used)}</p>
+                    <p className="text-xs text-gray-400">/ {formatLimit()}</p>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                    <div 
+                      className={`h-1.5 rounded-full transition-all ${
+                        stats.percentUsed > 90 ? 'bg-red-500' :
+                        stats.percentUsed > 75 ? 'bg-orange-500' :
+                        stats.percentUsed > 50 ? 'bg-yellow-500' : 'bg-green-500'
+                      }`}
+                      style={{ width: `${Math.min(stats.percentUsed, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* 存储警告提示 */}
+      {warning && ['medium', 'high', 'critical'].includes(warning) && (
+        <Card className={`border-0 ${getWarningColor(warning)}`}>
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-xl">{getWarningIcon(warning)}</span>
+              <div>
+                <h3 className="font-semibold">{getWarningMessage(warning)}</h3>
+                <p className="text-sm mt-1">
+                  已使用 {stats?.percentUsed.toFixed(1)}% ({formatSize(stats?.used || 0)})，
+                  剩余 {formatSize(stats?.available || 0)}
+                </p>
+                <p className="text-xs mt-2 opacity-80">
+                  建议：定期备份数据并清理旧的借阅记录
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 快捷提示 */}
       <Card className="border-0 shadow-sm bg-gradient-to-r from-blue-500 to-purple-600">

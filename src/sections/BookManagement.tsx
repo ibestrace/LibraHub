@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLibrary } from '@/hooks/useLibrary';
-import { 
-  Search, 
-  Plus, 
-  Edit2, 
-  Trash2, 
+import { IsbnService } from '@/services/isbn';
+import {
+  Search,
+  Plus,
+  Edit2,
+  Trash2,
   ScanLine,
   BookOpen,
   X,
   ChevronLeft,
   ChevronRight,
-  Download
+  Download,
+  Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,6 +69,9 @@ export default function BookManagement() {
   // 扫码输入
   const [scanMode, setScanMode] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+
+  // ISBN 自动填充状态
+  const [isFetchingIsbn, setIsFetchingIsbn] = useState(false);
 
   // 表单数据
   const [formData, setFormData] = useState<Partial<Book>>({
@@ -179,6 +184,34 @@ export default function BookManagement() {
     setSelectedBook(book);
     setFormData(book);
     setIsEditDialogOpen(true);
+  };
+
+  // ISBN 自动填充
+  const handleIsbnBlur = async () => {
+    const isbn = formData.isbn?.trim() || '';
+    if (!isbn || !IsbnService.isValidIsbn(isbn)) {
+      return;
+    }
+
+    setIsFetchingIsbn(true);
+    try {
+      const bookInfo = await IsbnService.fetchByIsbn(isbn);
+      if (bookInfo) {
+        setFormData(prev => ({
+          ...prev,
+          ...bookInfo,
+          isbn,
+        }));
+        toast.success('书籍信息已自动填充');
+      } else {
+        toast.info('未找到书籍信息，请手动填写');
+      }
+    } catch (error) {
+      console.error('ISBN 查询失败:', error);
+      toast.error('查询失败，请手动填写');
+    } finally {
+      setIsFetchingIsbn(false);
+    }
   };
 
   // 打开删除弹窗
