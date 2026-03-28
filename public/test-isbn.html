@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>ISBN 数据源测试</title>
+  <style>
+    body { font-family: monospace; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #0f172a; color: #e2e8f0; }
+    h2 { color: #7dd3fc; }
+    .section { background: #1e293b; border-radius: 8px; padding: 16px; margin: 12px 0; }
+    .ok { color: #4ade80; } .err { color: #f87171; } .warn { color: #fbbf24; } .info { color: #94a3b8; font-size:0.9em; }
+    .value { color: #f1f5f9; font-weight: bold; }
+    input { background: #334155; border: 1px solid #475569; color: #f1f5f9; padding: 8px 12px; border-radius: 6px; width: 220px; font-size: 1em; }
+    button { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.9em; margin: 4px; }
+    button:hover { background: #2563eb; }
+    button.green { background: #16a34a; } button.green:hover { background: #15803d; }
+    button.purple { background: #7c3aed; } button.purple:hover { background: #6d28d9; }
+    pre { white-space: pre-wrap; word-break: break-all; font-size: 0.8em; color: #94a3b8; max-height: 250px; overflow: auto; background: #0f172a; padding: 8px; border-radius: 4px; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <h2>📚 ISBN 数据源测试工具</h2>
+  <div class="section">
+    <input type="text" id="isbnInput" value="9787101341625" placeholder="ISBN">
+    <button class="green" onclick="testNLC()">🏛️ 国家图书馆 OPAC</button>
+    <button onclick="testGoogleBooks()">🔵 Google Books</button>
+    <button class="purple" onclick="testAll()">🚀 全部测试</button>
+  </div>
+  <div id="output"></div>
+
+  <script>
+    const getISBN = () => document.getElementById('isbnInput').value.trim().replace(/[-\s]/g, '');
+
+    async function testAll() {
+      await testNLC();
+      const prev = document.getElementById('output').innerHTML;
+      document.getElementById('output').innerHTML = prev + '<div class="section info">分隔线</div>';
+      await testGoogleBooks();
+    }
+
+    // ===== 国家图书馆 OPAC（通过 Vite proxy） =====
+    async function testNLC() {
+      const isbn = getISBN();
+      const out = document.getElementById('output');
+      out.innerHTML = `<div class="section warn">⏳ 正在查询国家图书馆 OPAC...</div>`;
+
+      let html = `<div class="section"><h3>🏛️ 国家图书馆 OPAC（opac.nlc.cn）</h3>`;
+      html += `<div class="info">代理路径: /api/nlc → http://opac.nlc.cn/F</div>`;
+
+      try {
+        const params = new URLSearchParams({
+          func: 'find-b', find_code: 'ISB', request: isbn,
+          local_base: 'NLC01',
+          filter_code_1: 'WLN', filter_request_1: '',
+          filter_code_2: 'WYR', filter_request_2: '',
+          filter_code_3: 'WYR', filter_request_3: '',
+          filter_code_4: 'WFM', filter_request_4: '',
+          filter_code_5: 'WSL', filter_request_5: '',
+        });
+
+        const url = `/api/nlc?${params}`;
+        html += `<div class="info">请求 URL: ${url}</div>`;
+
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 12000);
+        const res = await fetch(url, { signal: controller.signal });
+
+        html += `<div class="${res.ok ? 'ok' : 'err'}">HTTP 状态: ${res.status} ${res.statusText}</div>`;
+
+        if (!res.ok) {
+          html += `<div class="err">❌ 请求失败</div>`;
+          out.innerHTML = html + '</div>';
+          return;
+        }
+
+        const htmlText = await res.text();
+        html += `<div class="info">响应长度: ${htmlText.length} 字节</div>`;
+
+        // 解析 HTML
+        const result = parseNLCHtml(htmlText, isbn);
+        if (result) {
+          html += `<br><div class="ok">✅ 解析成功！</div>`;
+          html += row('书名', result.title);
+          html += row('作者', result.author);
+          html += row('出版社', result.publisher);
+          html += row('出版年', result.publishDate);
+          html += row('页数', result.pageCount);
+          html += row('ISBN', result.isbn);
+          if (result.description) {
+            html += row('内容简介', result.description.substring(0, 150) + (result.description.length > 150 ? '...' : ''));
+          }
+        } else {
+          html += `<div class="warn">⚠️ 解析失败或未找到书目，原始响应预览：</div>`;
+          html += `<pre>${esc(htmlText.substring(0, 3000))}</pre>`;
+        }
+      } catch(e) {
+        if ((e as Error).name === 'AbortError') {
+          html += `<div class="err">❌ 请求超时（12秒）</div>`;
+        } else {
+          html += `<div class="err">❌ 请求失败: ${(e as Error).message}</div>`;
+          if ((e as Error).message.includes('Failed to fetch')) {
+            html += `<div class="warn">→ Dev server 可能未重启，代理配置需要重启 vite 才能生效</div>`;
+          }
+        }
+      }
+
+      html += `</div>`;
+      out.innerHTML = html;
+    }
+
+    function parseNLCHtml(html, isbn) {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const table = doc.querySelector('table#td');
+        if (!table) return null;
+
+        const data = {};
+        let prevKey = '';
+        table.querySelectorAll('tr').forEach(row => {
+          const tds = row.querySelectorAll('td.td1');
+          if (tds.length === 2) {
+            const k = tds[0].textContent.replace(/\n|\xa0/g, ' ').trim();
+            const v = tds[1].textContent.replace(/\n|\xa0/g, ' ').trim();
+            if (k) { data[k] = v; prevKey = k; }
+            else if (prevKey) data[prevKey] = (data[prevKey] ? data[prevKey] + '\n' : '') + v;
+          }
+        });
+
+        if (Object.keys(data).length === 0) return null;
+
+        let title = data['题名与责任'] || '';
+        const tm = title.match(/^([\u4e00-\u9fa5a-zA-Z0-9\s:：·—.]+?)(?:\s*[\/\[（(]|$)/);
+        if (tm) title = tm[1].trim();
+        if (!title) return null;
+
+        const authorRaw = data['著者'] || '';
+        const author = authorRaw.split('\n').map(a => {
+          const m = a.trim().match(/^(.*?)\s+(?:著|编|译|主编)/);
+          return m ? m[1].trim() : a.trim();
+        }).filter(Boolean).join(', ');
+
+        const pubItem = data['出版项'] || '';
+        const pm = pubItem.match(/:\s*(.+?),\s*(\d{4})/);
+        const publisher = pm ? pm[1].trim() : '';
+        const year = pm ? pm[2] : (pubItem.match(/\b(\d{4})\b/) || [])[1] || '';
+        const publishDate = year ? `${year}-01-01` : undefined;
+
+        const physDesc = data['形态项'] || '';
+        const pgm = physDesc.match(/(\d+)\s*页/);
+        const pageCount = pgm ? parseInt(pgm[1]) : undefined;
+
+        const isbnRaw = data['ISBN'] || '';
+        const isbnClean = (isbnRaw.replace(/-/g, '').match(/\d{13}|\d{10}/) || [isbn])[0];
+
+        const description = data['内容提要'] || '';
+
+        return { title, author, publisher, publishDate, pageCount, isbn: isbnClean, description };
+      } catch(e) {
+        return null;
+      }
+    }
+
+    // ===== Google Books =====
+    async function testGoogleBooks() {
+      const isbn = getISBN();
+      let html = `<div class="section"><h3>🔵 Google Books API</h3>`;
+      try {
+        const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.totalItems > 0 && data.items) {
+          const info = data.items[0].volumeInfo;
+          html += `<div class="ok">✅ 找到书籍（totalItems: ${data.totalItems}）</div>`;
+          html += row('书名', info.title);
+          html += row('副标题', info.subtitle);
+          html += row('作者', info.authors?.join(', '));
+          html += row('出版社', info.publisher);
+          html += row('出版日期', info.publishedDate);
+          html += row('页数', info.pageCount);
+          html += row('语言', info.language);
+          if (info.imageLinks?.thumbnail) {
+            const cover = info.imageLinks.thumbnail.replace('http://', 'https://').replace('zoom=1', 'zoom=3');
+            html += `<div><span class="info">封面: </span><br><img src="${cover}" style="max-width:110px;border-radius:4px;margin-top:6px"></div>`;
+          }
+        } else {
+          html += `<div class="err">❌ 未找到（totalItems: ${data.totalItems}）</div>`;
+        }
+      } catch(e) {
+        html += `<div class="err">❌ 失败: ${(e as Error).message}</div>`;
+      }
+      html += `</div>`;
+      document.getElementById('output').innerHTML += html;
+    }
+
+    function row(label, value) {
+      if (value === undefined || value === null || value === '') return '';
+      return `<div><span class="info">${label}: </span><span class="value">${esc(String(value))}</span></div>`;
+    }
+    function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  </script>
+</body>
+</html>

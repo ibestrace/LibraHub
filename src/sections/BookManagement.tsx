@@ -72,6 +72,8 @@ export default function BookManagement() {
 
   // ISBN 自动填充状态
   const [isFetchingIsbn, setIsFetchingIsbn] = useState(false);
+  // ISBN 防抖定时器（扫码枪连续输入时等稳定后再查询）
+  const isbnDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 表单数据
   const [formData, setFormData] = useState<Partial<Book>>({
@@ -103,6 +105,15 @@ export default function BookManagement() {
       barcodeInputRef.current.focus();
     }
   }, [scanMode]);
+
+  // 清理防抖定时器，防止内存泄漏
+  useEffect(() => {
+    return () => {
+      if (isbnDebounceRef.current) {
+        clearTimeout(isbnDebounceRef.current);
+      }
+    };
+  }, []);
 
   // 处理扫码
   const handleBarcodeScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -186,32 +197,44 @@ export default function BookManagement() {
     setIsEditDialogOpen(true);
   };
 
-  // ISBN 自动填充
-  const handleIsbnBlur = async () => {
-    const isbn = formData.isbn?.trim() || '';
-    if (!isbn || !IsbnService.isValidIsbn(isbn)) {
+  // ISBN 变化处理：校验通过后自动查询（带防抖，适配扫码枪快速输入）
+  const handleIsbnChange = (isbn: string) => {
+    setFormData(prev => ({ ...prev, isbn }));
+
+    // 清除上一次的防抖定时器
+    if (isbnDebounceRef.current) {
+      clearTimeout(isbnDebounceRef.current);
+    }
+
+    const cleanIsbn = isbn.replace(/[-\s]/g, '');
+
+    // ISBN 位数未到 10 或 13 位时不触发
+    if (!cleanIsbn || !IsbnService.isValidIsbn(cleanIsbn)) {
       return;
     }
 
-    setIsFetchingIsbn(true);
-    try {
-      const bookInfo = await IsbnService.fetchByIsbn(isbn);
-      if (bookInfo) {
-        setFormData(prev => ({
-          ...prev,
-          ...bookInfo,
-          isbn,
-        }));
-        toast.success('书籍信息已自动填充');
-      } else {
-        toast.info('未找到书籍信息，请手动填写');
+    // 300ms 防抖：等扫码枪输入完全稳定后再发请求
+    isbnDebounceRef.current = setTimeout(async () => {
+      setIsFetchingIsbn(true);
+      try {
+        const bookInfo = await IsbnService.fetchByIsbn(cleanIsbn);
+        if (bookInfo) {
+          setFormData(prev => ({
+            ...prev,
+            ...bookInfo,
+            isbn: cleanIsbn,
+          }));
+          toast.success('书籍信息已自动填充');
+        } else {
+          toast.info('未找到书籍信息，请手动填写');
+        }
+      } catch (error) {
+        console.error('ISBN 查询失败:', error);
+        toast.error('查询失败，请手动填写');
+      } finally {
+        setIsFetchingIsbn(false);
       }
-    } catch (error) {
-      console.error('ISBN 查询失败:', error);
-      toast.error('查询失败，请手动填写');
-    } finally {
-      setIsFetchingIsbn(false);
-    }
+    }, 300);
   };
 
   // 打开删除弹窗
@@ -454,11 +477,12 @@ export default function BookManagement() {
               />
             </div>
             <div className="space-y-2">
-              <Label>ISBN</Label>
+              <Label>ISBN {isFetchingIsbn && <span className="text-xs text-muted-foreground ml-1">查询中...</span>}</Label>
               <Input
                 value={formData.isbn}
-                onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
-                placeholder="请输入ISBN号"
+                onChange={(e) => handleIsbnChange(e.target.value)}
+                placeholder="扫描或输入ISBN号，自动填充书籍信息"
+                disabled={isFetchingIsbn}
               />
             </div>
             <div className="space-y-2 col-span-2">
@@ -565,10 +589,12 @@ export default function BookManagement() {
               />
             </div>
             <div className="space-y-2">
-              <Label>ISBN</Label>
+              <Label>ISBN {isFetchingIsbn && <span className="text-xs text-muted-foreground ml-1">查询中...</span>}</Label>
               <Input
                 value={formData.isbn}
-                onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
+                onChange={(e) => handleIsbnChange(e.target.value)}
+                placeholder="扫描或输入ISBN号，自动填充书籍信息"
+                disabled={isFetchingIsbn}
               />
             </div>
             <div className="space-y-2 col-span-2">
