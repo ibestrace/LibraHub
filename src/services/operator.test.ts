@@ -1,7 +1,6 @@
 // OperatorService 测试
 import { describe, it, expect, beforeEach } from 'vitest';
 import { OperatorService } from './operator';
-import { StorageService } from './storage';
 
 describe('OperatorService', () => {
   beforeEach(() => {

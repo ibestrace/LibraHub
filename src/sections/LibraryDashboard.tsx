@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   BookOpen, 
   Users, 
@@ -8,7 +8,8 @@ import {
   Menu,
   Database,
   Trophy,
-  UsersRound
+  UsersRound,
+  Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -24,21 +25,26 @@ import SystemSettings from './SystemSettings';
 import MemberGroupManagement from './MemberGroupManagement';
 import ReadingRanking from './ReadingRanking';
 
-// 导航项
+// 导航项配置 - 添加渐变色
 const navItems = [
-  { id: 'dashboard', label: '数据概览', icon: BarChart3 },
-  { id: 'books', label: '书籍管理', icon: BookOpen },
-  { id: 'members', label: '会员管理', icon: Users },
-  { id: 'groups', label: '分组管理', icon: UsersRound },
-  { id: 'borrow', label: '借阅归还', icon: RotateCcw },
-  { id: 'ranking', label: '阅读排行', icon: Trophy },
-  { id: 'data', label: '数据管理', icon: Database },
-  { id: 'settings', label: '系统设置', icon: Settings },
+  { id: 'dashboard', label: '数据概览', icon: BarChart3, gradient: 'from-blue-500 to-cyan-400' },
+  { id: 'books', label: '书籍管理', icon: BookOpen, gradient: 'from-emerald-500 to-teal-400' },
+  { id: 'members', label: '会员管理', icon: Users, gradient: 'from-violet-500 to-purple-400' },
+  { id: 'groups', label: '分组管理', icon: UsersRound, gradient: 'from-fuchsia-500 to-pink-400' },
+  { id: 'borrow', label: '借阅归还', icon: RotateCcw, gradient: 'from-amber-500 to-orange-400' },
+  { id: 'ranking', label: '阅读排行', icon: Trophy, gradient: 'from-rose-500 to-red-400' },
+  { id: 'data', label: '数据管理', icon: Database, gradient: 'from-indigo-500 to-blue-400' },
+  { id: 'settings', label: '系统设置', icon: Settings, gradient: 'from-slate-500 to-gray-400' },
 ];
 
 export default function LibraryDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // 渲染内容区域
   const renderContent = () => {
@@ -70,16 +76,11 @@ export default function LibraryDashboard() {
       <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-gray-200">
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
-            <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M12 6v7" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              <path d="M9 8h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
+            <Sparkles className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-gray-900">LibraHub</h1>
+            <h1 className="font-bold text-xl gradient-text">LibraHub</h1>
             <p className="text-xs text-gray-500">智能图书管理系统</p>
           </div>
         </div>
@@ -88,33 +89,55 @@ export default function LibraryDashboard() {
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
+            const isActive = activeTab === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
                 className={cn(
-                  'w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
-                  activeTab === item.id
-                    ? 'bg-blue-50 text-blue-700'
+                  'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 relative overflow-hidden group',
+                  isActive
+                    ? 'text-foreground'
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 )}
               >
-                <Icon className="w-5 h-5" />
-                {item.label}
+                {isActive && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-indigo-50/50 rounded-xl" />
+                )}
+                {isActive && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-blue-500 to-indigo-500 rounded-r-full" />
+                )}
+                <span className="relative z-10 flex items-center gap-3">
+                  <div className={cn(
+                    'w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-300',
+                    isActive
+                      ? `bg-gradient-to-br ${item.gradient} shadow-lg`
+                      : 'bg-gray-100 group-hover:bg-gray-200'
+                  )}>
+                    <Icon className={cn(
+                      'w-5 h-5 transition-colors',
+                      isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'
+                    )} />
+                  </div>
+                  <span className={cn(isActive ? 'font-semibold' : '')}>{item.label}</span>
+                </span>
               </button>
             );
           })}
         </nav>
 
         {/* 底部信息 */}
-        <div className="px-6 py-4 border-t border-gray-100">
+        <div className="px-4 py-4 border-t border-gray-100 m-3 rounded-xl bg-gradient-to-r from-blue-50/50 to-indigo-50/50">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-              <span className="text-sm font-medium text-gray-600">管</span>
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center shadow-md">
+              <span className="text-sm font-bold text-white">管</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">管理员</p>
-              <p className="text-xs text-gray-500 truncate">在线</p>
+              <p className="text-sm font-semibold text-gray-900 truncate">管理员</p>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <p className="text-xs text-gray-500">在线</p>
+              </div>
             </div>
           </div>
         </div>
@@ -154,6 +177,7 @@ export default function LibraryDashboard() {
                 <nav className="flex-1 px-4 py-4 space-y-1">
                   {navItems.map((item) => {
                     const Icon = item.icon;
+                    const isActive = activeTab === item.id;
                     return (
                       <button
                         key={item.id}
@@ -162,14 +186,32 @@ export default function LibraryDashboard() {
                           setIsMobileMenuOpen(false);
                         }}
                         className={cn(
-                          'w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
-                          activeTab === item.id
-                            ? 'bg-blue-50 text-blue-700'
+                          'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 relative overflow-hidden group',
+                          isActive
+                            ? 'text-foreground'
                             : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                         )}
                       >
-                        <Icon className="w-5 h-5" />
-                        {item.label}
+                        {isActive && (
+                          <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-indigo-50/50 rounded-xl" />
+                        )}
+                        {isActive && (
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-blue-500 to-indigo-500 rounded-r-full" />
+                        )}
+                        <span className="relative z-10 flex items-center gap-3">
+                          <div className={cn(
+                            'w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-300',
+                            isActive
+                              ? `bg-gradient-to-br ${item.gradient} shadow-lg`
+                              : 'bg-gray-100 group-hover:bg-gray-200'
+                          )}>
+                            <Icon className={cn(
+                              'w-5 h-5 transition-colors',
+                              isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'
+                            )} />
+                          </div>
+                          <span className={cn(isActive ? 'font-semibold' : '')}>{item.label}</span>
+                        </span>
                       </button>
                     );
                   })}
@@ -201,7 +243,9 @@ export default function LibraryDashboard() {
           </div>
 
           {/* 内容 */}
-          {renderContent()}
+          <div className={mounted ? 'animate-fade-in-up' : 'opacity-0'}>
+            {renderContent()}
+          </div>
         </div>
       </main>
     </div>

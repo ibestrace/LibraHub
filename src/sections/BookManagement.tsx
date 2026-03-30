@@ -12,7 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Sparkles
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,6 +72,7 @@ export default function BookManagement() {
 
   // ISBN 自动填充状态
   const [isFetchingIsbn, setIsFetchingIsbn] = useState(false);
+  const [isbnCacheStatus, setIsbnCacheStatus] = useState<'fresh' | 'cached' | null>(null);
   // ISBN 防抖定时器（扫码枪连续输入时等稳定后再查询）
   const isbnDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -200,6 +201,7 @@ export default function BookManagement() {
   // ISBN 变化处理：校验通过后自动查询（带防抖，适配扫码枪快速输入）
   const handleIsbnChange = (isbn: string) => {
     setFormData(prev => ({ ...prev, isbn }));
+    setIsbnCacheStatus(null);
 
     // 清除上一次的防抖定时器
     if (isbnDebounceRef.current) {
@@ -217,7 +219,21 @@ export default function BookManagement() {
     isbnDebounceRef.current = setTimeout(async () => {
       setIsFetchingIsbn(true);
       try {
+        // 检查是否是缓存命中
+        const cacheStats = IsbnService.getCacheStats();
+        console.log(`[ISBN] 当前缓存大小: ${cacheStats.size}`);
+        
         const bookInfo = await IsbnService.fetchByIsbn(cleanIsbn);
+        
+        // 再次检查缓存状态（因为 fetchByIsbn 可能会更新缓存）
+        const newCacheStats = IsbnService.getCacheStats();
+        if (newCacheStats.size === cacheStats.size && bookInfo) {
+          // 缓存大小没变但有结果，说明是缓存命中
+          setIsbnCacheStatus('cached');
+        } else {
+          setIsbnCacheStatus('fresh');
+        }
+        
         if (bookInfo) {
           setFormData(prev => ({
             ...prev,
@@ -235,6 +251,37 @@ export default function BookManagement() {
         setIsFetchingIsbn(false);
       }
     }, 300);
+  };
+
+  // 刷新 ISBN 缓存
+  const handleRefreshIsbn = async () => {
+    const cleanIsbn = formData.isbn?.replace(/[-\s]/g, '');
+    if (!cleanIsbn || !IsbnService.isValidIsbn(cleanIsbn)) {
+      toast.error('请输入有效的 ISBN');
+      return;
+    }
+
+    setIsFetchingIsbn(true);
+    setIsbnCacheStatus(null);
+    try {
+      const bookInfo = await IsbnService.refreshIsbn(cleanIsbn);
+      if (bookInfo) {
+        setFormData(prev => ({
+          ...prev,
+          ...bookInfo,
+          isbn: cleanIsbn,
+        }));
+        setIsbnCacheStatus('fresh');
+        toast.success('已刷新书籍信息');
+      } else {
+        toast.info('未找到更新的书籍信息');
+      }
+    } catch (error) {
+      console.error('ISBN 刷新失败:', error);
+      toast.error('刷新失败，请稍后重试');
+    } finally {
+      setIsFetchingIsbn(false);
+    }
   };
 
   // 打开删除弹窗
@@ -477,13 +524,37 @@ export default function BookManagement() {
               />
             </div>
             <div className="space-y-2">
-              <Label>ISBN {isFetchingIsbn && <span className="text-xs text-muted-foreground ml-1">查询中...</span>}</Label>
-              <Input
-                value={formData.isbn}
-                onChange={(e) => handleIsbnChange(e.target.value)}
-                placeholder="扫描或输入ISBN号，自动填充书籍信息"
-                disabled={isFetchingIsbn}
-              />
+              <Label>
+                ISBN
+                {isFetchingIsbn && <span className="text-xs text-muted-foreground ml-1">查询中...</span>}
+                {isbnCacheStatus === 'cached' && !isFetchingIsbn && (
+                  <span className="text-xs text-green-600 ml-1">(来自缓存)</span>
+                )}
+                {isbnCacheStatus === 'fresh' && !isFetchingIsbn && (
+                  <span className="text-xs text-blue-600 ml-1">(已刷新)</span>
+                )}
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  value={formData.isbn}
+                  onChange={(e) => handleIsbnChange(e.target.value)}
+                  placeholder="扫描或输入ISBN号，自动填充书籍信息"
+                  disabled={isFetchingIsbn}
+                  className="flex-1"
+                />
+                {formData.isbn && IsbnService.isValidIsbn(formData.isbn.replace(/[-\s]/g, '')) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleRefreshIsbn}
+                    disabled={isFetchingIsbn}
+                    title="刷新书籍信息"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isFetchingIsbn ? 'animate-spin' : ''}`} />
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="space-y-2 col-span-2">
               <Label>书名 *</Label>
@@ -589,13 +660,37 @@ export default function BookManagement() {
               />
             </div>
             <div className="space-y-2">
-              <Label>ISBN {isFetchingIsbn && <span className="text-xs text-muted-foreground ml-1">查询中...</span>}</Label>
-              <Input
-                value={formData.isbn}
-                onChange={(e) => handleIsbnChange(e.target.value)}
-                placeholder="扫描或输入ISBN号，自动填充书籍信息"
-                disabled={isFetchingIsbn}
-              />
+              <Label>
+                ISBN
+                {isFetchingIsbn && <span className="text-xs text-muted-foreground ml-1">查询中...</span>}
+                {isbnCacheStatus === 'cached' && !isFetchingIsbn && (
+                  <span className="text-xs text-green-600 ml-1">(来自缓存)</span>
+                )}
+                {isbnCacheStatus === 'fresh' && !isFetchingIsbn && (
+                  <span className="text-xs text-blue-600 ml-1">(已刷新)</span>
+                )}
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  value={formData.isbn}
+                  onChange={(e) => handleIsbnChange(e.target.value)}
+                  placeholder="扫描或输入ISBN号，自动填充书籍信息"
+                  disabled={isFetchingIsbn}
+                  className="flex-1"
+                />
+                {formData.isbn && IsbnService.isValidIsbn(formData.isbn.replace(/[-\s]/g, '')) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleRefreshIsbn}
+                    disabled={isFetchingIsbn}
+                    title="刷新书籍信息"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isFetchingIsbn ? 'animate-spin' : ''}`} />
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="space-y-2 col-span-2">
               <Label>书名 *</Label>

@@ -42,6 +42,7 @@ export default function BorrowReturn() {
     borrowBook, 
     returnBook, 
     renewBook, 
+    updateBook,
     getBookByBarcode, 
     getMemberByCardNumber,
     getOverdueBorrows 
@@ -211,7 +212,6 @@ export default function BorrowReturn() {
     
     try {
       // 更新书籍字数信息
-      const { updateBook } = useLibrary();
       await updateBook(pendingBook.id, { wordCount });
       
       toast.success('字数录入成功');

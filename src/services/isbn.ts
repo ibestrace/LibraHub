@@ -1,25 +1,6 @@
 // ISBN 服务 - 支持多数据源获取书籍信息
 import type { Book } from '@/types';
 
-// 豆瓣 API 接口定义
-interface DoubanBookInfo {
-  title: string;
-  title_origin?: string;
-  subtitle?: string;
-  author: string[];
-  translator?: string[];
-  publisher: string;
-  pubdate: string;
-  isbn: string;
-  isbn13: string;
-  pages: number;
-  price: string;
-  summary: string;
-  image: string;
-  binding: string;
-  tags: Array<{ name: string }>;
-}
-
 // 重试配置
 interface RetryConfig {
   maxRetries: number;
@@ -36,6 +17,110 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
 
 // API 超时配置（毫秒）
 const API_TIMEOUT = 5000;
+
+// ========== ISBN 缓存配置 ==========
+interface IsbnCacheEntry {
+  data: Partial<Book> | null;
+  timestamp: number;
+  source: string;
+}
+
+const CACHE_CONFIG = {
+  SUCCESS_TTL: 7 * 24 * 60 * 60 * 1000,  // 7 days for found books
+  NULL_TTL: 60 * 60 * 1000,              // 1 hour for not-found ISBNs
+  MAX_ENTRIES: 500,
+  STORAGE_KEY: 'isbn_cache_v1'
+};
+
+// 缓存存储管理
+class IsbnCache {
+  private cache: Map<string, IsbnCacheEntry>;
+  
+  constructor() {
+    this.cache = this.loadFromStorage();
+  }
+  
+  private loadFromStorage(): Map<string, IsbnCacheEntry> {
+    try {
+      const stored = localStorage.getItem(CACHE_CONFIG.STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return new Map(Object.entries(parsed));
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    return new Map();
+  }
+  
+  private saveToStorage(): void {
+    try {
+      const obj = Object.fromEntries(this.cache);
+      localStorage.setItem(CACHE_CONFIG.STORAGE_KEY, JSON.stringify(obj));
+    } catch {
+      // Storage might be full, evict oldest entries
+      this.evictOldest(50);
+      try {
+        const obj = Object.fromEntries(this.cache);
+        localStorage.setItem(CACHE_CONFIG.STORAGE_KEY, JSON.stringify(obj));
+      } catch {
+        // Give up if still failing
+      }
+    }
+  }
+  
+  private evictOldest(count: number): void {
+    const entries = Array.from(this.cache.entries());
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+    for (let i = 0; i < Math.min(count, entries.length); i++) {
+      this.cache.delete(entries[i][0]);
+    }
+  }
+  
+  get(isbn: string): IsbnCacheEntry | undefined {
+    const entry = this.cache.get(isbn);
+    if (!entry) return undefined;
+    
+    const now = Date.now();
+    const ttl = entry.data ? CACHE_CONFIG.SUCCESS_TTL : CACHE_CONFIG.NULL_TTL;
+    
+    if (now - entry.timestamp > ttl) {
+      this.cache.delete(isbn);
+      this.saveToStorage();
+      return undefined;
+    }
+    
+    return entry;
+  }
+  
+  set(isbn: string, data: Partial<Book> | null, source: string): void {
+    // Evict if at capacity
+    if (this.cache.size >= CACHE_CONFIG.MAX_ENTRIES) {
+      this.evictOldest(10);
+    }
+    
+    this.cache.set(isbn, {
+      data,
+      timestamp: Date.now(),
+      source
+    });
+    this.saveToStorage();
+  }
+  
+  clear(): void {
+    this.cache.clear();
+    localStorage.removeItem(CACHE_CONFIG.STORAGE_KEY);
+  }
+  
+  getStats(): { size: number } {
+    return {
+      size: this.cache.size
+    };
+  }
+}
+
+// 缓存单例
+const isbnCache = new IsbnCache();
 
 // OpenLibrary API 接口定义
 interface OpenLibraryBookInfo {
@@ -243,6 +328,13 @@ export class IsbnService {
       return null;
     }
 
+    // 检查缓存
+    const cached = isbnCache.get(cleanIsbn);
+    if (cached) {
+      console.log(`[ISBN] 缓存命中: ${cleanIsbn} (来源: ${cached.source})`);
+      return cached.data;
+    }
+
     // 获取已启用的 API
     const enabledApis = this.getEnabledApis();
 
@@ -266,6 +358,8 @@ export class IsbnService {
 
         if (bookInfo) {
           console.log(`✓ 从 ${api.name} 成功获取书籍信息`);
+          // 缓存成功的结果
+          isbnCache.set(cleanIsbn, bookInfo, api.name);
           return bookInfo;
         }
       } catch (error) {
@@ -275,7 +369,34 @@ export class IsbnService {
     }
 
     console.warn('所有数据源均未找到该 ISBN 的书籍信息');
+    // 缓存空结果，防止短时间内重复请求
+    isbnCache.set(cleanIsbn, null, 'none');
     return null;
+  }
+
+  /**
+   * 清除 ISBN 缓存
+   */
+  static clearCache(): void {
+    isbnCache.clear();
+  }
+
+  /**
+   * 获取缓存统计信息
+   */
+  static getCacheStats(): { size: number } {
+    return isbnCache.getStats();
+  }
+
+  /**
+   * 强制刷新 ISBN 信息（绕过缓存）
+   */
+  static async refreshIsbn(isbn: string): Promise<Partial<Book> | null> {
+    const cleanIsbn = isbn.replace(/[-\s]/g, '');
+    // 删除缓存条目
+    isbnCache.set(cleanIsbn, null, 'refresh');
+    // 重新获取
+    return this.fetchByIsbn(cleanIsbn);
   }
 
   /**
@@ -955,64 +1076,6 @@ export class IsbnService {
       if (errorName === 'TypeError' && errorMsg.includes('fetch')) {
         console.warn('[ISBN] 提示: 国内访问 OpenLibrary API 可能受限，请检查网络或配置代理');
       }
-      return null;
-    }
-  }
-
-  /**
-   * 从豆瓣 API 获取书籍信息（需要 API 密钥）
-   */
-  private static async fetchFromDouban(isbn: string): Promise<Partial<Book> | null> {
-    try {
-      const baseUrl = this.API_CONFIGS.find(a => a.name === 'Douban')!.baseUrl;
-      const url = `${baseUrl}/isbn/${isbn}`;
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          console.warn('豆瓣 API 未找到该 ISBN 的书籍信息');
-        } else if (response.status === 403) {
-          console.warn('豆瓣 API 访问受限，需要 API Key');
-        }
-        return null;
-      }
-
-      const data: DoubanBookInfo = await response.json();
-
-      const price = parseFloat(data.price.replace(/[^0-9.]/g, '')) || undefined;
-      const author = Array.isArray(data.author) ? data.author.join(', ') : data.author;
-      const translator = data.translator ? data.translator.join(', ') : undefined;
-
-      let publishDate: string | undefined;
-      if (data.pubdate) {
-        const dateMatch = data.pubdate.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-        if (dateMatch) {
-          publishDate = `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`;
-        } else {
-          const yearMatch = data.pubdate.match(/(\d{4})[-/](\d{1,2})/);
-          if (yearMatch) {
-            publishDate = `${yearMatch[1]}-${yearMatch[2].padStart(2, '0')}`;
-          } else if (/^\d{4}$/.test(data.pubdate)) {
-            publishDate = `${data.pubdate}-01-01`;
-          }
-        }
-      }
-
-      return {
-        title: data.title,
-        subtitle: data.subtitle || data.title_origin,
-        author,
-        translator,
-        publisher: data.publisher,
-        publishDate,
-        isbn: data.isbn13 || data.isbn,
-        pageCount: data.pages || undefined,
-        price,
-        description: data.summary,
-        cover: data.image,
-      };
-    } catch (error) {
-      console.error('豆瓣 API 查询失败:', error);
       return null;
     }
   }

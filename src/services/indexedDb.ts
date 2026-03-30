@@ -20,35 +20,35 @@ const STORES = {
 
 type StoreName = keyof typeof STORES;
 
-// 索引配置
-const INDEX_CONFIG: Record<StoreName, Array<{ name: string; keyPath: string; unique?: boolean }>> = {
-  books: [
+// 索引配置 - 使用与 STORES 相同的键
+const INDEX_CONFIG: Record<keyof typeof STORES, Array<{ name: string; keyPath: string; unique?: boolean }>> = {
+  BOOKS: [
     { name: 'barcode', keyPath: 'barcode', unique: true },
     { name: 'isbn', keyPath: 'isbn', unique: false },
     { name: 'status', keyPath: 'status', unique: false },
     { name: 'categoryId', keyPath: 'categoryId', unique: false }
   ],
-  members: [
+  MEMBERS: [
     { name: 'cardNumber', keyPath: 'cardNumber', unique: true },
     { name: 'status', keyPath: 'status', unique: false },
     { name: 'groupId', keyPath: 'groupId', unique: false }
   ],
-  member_types: [],
-  borrow_records: [
+  MEMBER_TYPES: [],
+  BORROW_RECORDS: [
     { name: 'bookId', keyPath: 'bookId', unique: false },
     { name: 'memberId', keyPath: 'memberId', unique: false },
     { name: 'status', keyPath: 'status', unique: false },
     { name: 'borrowDate', keyPath: 'borrowDate', unique: false }
   ],
-  reservations: [],
-  categories: [],
-  logs: [
+  RESERVATIONS: [],
+  CATEGORIES: [],
+  LOGS: [
     { name: 'type', keyPath: 'type', unique: false },
     { name: 'createdAt', keyPath: 'createdAt', unique: false }
   ],
-  settings: [],
-  member_groups: [],
-  reading_stats: [
+  SETTINGS: [],
+  MEMBER_GROUPS: [],
+  READING_STATS: [
     { name: 'memberId', keyPath: 'memberId', unique: false },
     { name: 'yearMonth', keyPath: 'yearMonth', unique: false }
   ]
@@ -333,7 +333,7 @@ export class IndexedDbService {
     };
 
     const promises = Object.entries(STORES).map(async ([key, storeName]) => {
-      const data = await this.getAll(storeName);
+      const data = await this.getAll(storeName as StoreName);
       result[key.toLowerCase()] = data;
     });
 
@@ -350,7 +350,7 @@ export class IndexedDbService {
     const promises = Object.entries(STORES).map(async ([key, storeName]) => {
       const storeData = data[key.toLowerCase()];
       if (Array.isArray(storeData) && storeData.length > 0) {
-        await this.bulkPut(storeName, storeData);
+        await this.bulkPut(storeName as StoreName, storeData);
       }
     });
 
@@ -366,7 +366,7 @@ export class IndexedDbService {
     const stats: Record<string, number> = {};
     
     const promises = Object.entries(STORES).map(async ([key, storeName]) => {
-      const data = await this.getAll(storeName);
+      const data = await this.getAll(storeName as StoreName);
       stats[key] = data.length;
     });
 

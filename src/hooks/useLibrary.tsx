@@ -142,7 +142,7 @@ interface LibraryContextType {
   searchBooks: (params: { keyword?: string; categoryId?: string; status?: string }) => Book[];
   getBookByBarcode: (barcode: string) => Book | undefined;
   // 会员操作
-  addMember: (member: Omit<Member, 'id' | 'createdAt' | 'updatedAt' | 'currentBorrowCount'>) => Promise<Member>;
+  addMember: (member: Omit<Member, 'id' | 'createdAt' | 'updatedAt' | 'currentBorrowCount' | 'totalReadingWords'>) => Promise<Member>;
   updateMember: (id: string, updates: Partial<Member>) => Promise<Member | null>;
   deleteMember: (id: string) => Promise<boolean>;
   searchMembers: (params: { keyword?: string; status?: string }) => Member[];
@@ -231,7 +231,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // 会员操作
-  const addMember = useCallback(async (member: Omit<Member, 'id' | 'createdAt' | 'updatedAt' | 'currentBorrowCount'>) => {
+  const addMember = useCallback(async (member: Omit<Member, 'id' | 'createdAt' | 'updatedAt' | 'currentBorrowCount' | 'totalReadingWords'>) => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
       const newMember = MemberService.add(member);

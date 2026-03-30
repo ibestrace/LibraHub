@@ -264,7 +264,16 @@ export default function DataManagement() {
       localStorage.setItem('library_members', JSON.stringify(members));
 
       // 创建阅读统计
-      const readingStats = [];
+      const readingStats: Array<{
+        id: string;
+        memberId: string;
+        memberName: string;
+        groupId?: string;
+        yearMonth: string;
+        totalWords: number;
+        bookCount: number;
+        updatedAt?: string;
+      }> = [];
       borrowRecords.forEach(record => {
         if (record.status === 'returned' && record.wordCount && record.readingYearMonth) {
           const member = members.find(m => m.id === record.memberId);
