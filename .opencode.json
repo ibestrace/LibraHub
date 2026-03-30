@@ -1,0 +1,15 @@
+{
+  "model": "kimi-for-coding/k2p5",
+  "defaultModel": "kimi-for-coding/k2p5",
+  "preferredModels": {
+    "coding": "kimi-for-coding/k2p5",
+    "visual": "kimi-for-coding/k2p5",
+    "planning": "kimi-for-coding/k2p5",
+    "default": "kimi-for-coding/k2p5"
+  },
+  "modelConfig": {
+    "provider": "kimi-for-coding",
+    "model": "k2p5",
+    "fullModelId": "kimi-for-coding/k2p5"
+  }
+}
