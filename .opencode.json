@@ -7,9 +7,24 @@
     "planning": "kimi-for-coding/k2p5",
     "default": "kimi-for-coding/k2p5"
   },
+  "categoryModels": {
+    "visual-engineering": "kimi-for-coding/k2p5",
+    "ultrabrain": "kimi-for-coding/k2p5",
+    "deep": "kimi-for-coding/k2p5",
+    "artistry": "kimi-for-coding/k2p5",
+    "quick": "kimi-for-coding/k2p5",
+    "unspecified-low": "kimi-for-coding/k2p5",
+    "unspecified-high": "kimi-for-coding/k2p5",
+    "writing": "kimi-for-coding/k2p5"
+  },
   "modelConfig": {
     "provider": "kimi-for-coding",
     "model": "k2p5",
     "fullModelId": "kimi-for-coding/k2p5"
+  },
+  "agentConfig": {
+    "defaultAgentModel": "kimi-for-coding/k2p5",
+    "subagentModel": "kimi-for-coding/k2p5",
+    "orchestratorModel": "kimi-for-coding/k2p5"
   }
 }
