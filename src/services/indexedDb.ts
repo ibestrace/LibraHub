@@ -4,21 +4,21 @@
 const DB_NAME = 'LibraHub';
 const DB_VERSION = 1;
 
-// 对象仓库名称
-const STORES = {
-  BOOKS: 'books',
-  MEMBERS: 'members',
-  MEMBER_TYPES: 'member_types',
-  BORROW_RECORDS: 'borrow_records',
-  RESERVATIONS: 'reservations',
-  CATEGORIES: 'categories',
-  LOGS: 'logs',
-  SETTINGS: 'settings',
-  MEMBER_GROUPS: 'member_groups',
-  READING_STATS: 'reading_stats'
+// 对象仓库名称（值与 key 一致，用于 TypeScript 类型安全）
+export const STORES = {
+  BOOKS: 'BOOKS',
+  MEMBERS: 'MEMBERS',
+  MEMBER_TYPES: 'MEMBER_TYPES',
+  BORROW_RECORDS: 'BORROW_RECORDS',
+  RESERVATIONS: 'RESERVATIONS',
+  CATEGORIES: 'CATEGORIES',
+  LOGS: 'LOGS',
+  SETTINGS: 'SETTINGS',
+  MEMBER_GROUPS: 'MEMBER_GROUPS',
+  READING_STATS: 'READING_STATS'
 } as const;
 
-type StoreName = keyof typeof STORES;
+export type StoreName = keyof typeof STORES;
 
 // 索引配置 - 使用与 STORES 相同的键
 const INDEX_CONFIG: Record<keyof typeof STORES, Array<{ name: string; keyPath: string; unique?: boolean }>> = {
@@ -64,6 +64,12 @@ export class IndexedDbService {
   static async init(): Promise<void> {
     if (this.db) return Promise.resolve();
     if (this.initPromise) return this.initPromise;
+
+    // Guard for environments without indexedDB (e.g., jsdom tests)
+    if (typeof indexedDB === 'undefined') {
+      console.warn('IndexedDB 不可用，跳过初始化');
+      return Promise.resolve();
+    }
 
     this.initPromise = new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -386,5 +392,4 @@ export class IndexedDbService {
   }
 }
 
-// 导出存储名称映射
-export { STORES };
+// STORES already exported at line 8

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLibrary } from '@/hooks/useLibrary';
 import { IsbnService } from '@/services/isbn';
+import type { IsbnQueryProgress } from '@/services/isbn/types';
 import {
   Search,
   Plus,
@@ -12,7 +13,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  RefreshCw
+  RefreshCw,
+  Check,
+  Camera
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,17 +37,11 @@ import {
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
 import type { Book } from '@/types';
+import { bookStatusLabels } from '@/utils/statusLabels';
 
-// 书籍状态标签
-const statusLabels: Record<string, { label: string; color: string }> = {
-  available: { label: '可借阅', color: 'bg-green-100 text-green-700' },
-  borrowed: { label: '已借出', color: 'bg-blue-100 text-blue-700' },
-  reserved: { label: '已预约', color: 'bg-yellow-100 text-yellow-700' },
-  damaged: { label: '损坏', color: 'bg-red-100 text-red-700' },
-  lost: { label: '丢失', color: 'bg-gray-100 text-gray-700' },
-  under_repair: { label: '维修中', color: 'bg-orange-100 text-orange-700' }
-};
+// 使用共享的状态标签工具函数
 
 export default function BookManagement() {
   const { state, addBook, updateBook, deleteBook, searchBooks, getBookByBarcode } = useLibrary();
@@ -65,6 +62,7 @@ export default function BookManagement() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
 
   // 扫码输入
   const [scanMode, setScanMode] = useState(false);
@@ -73,6 +71,7 @@ export default function BookManagement() {
   // ISBN 自动填充状态
   const [isFetchingIsbn, setIsFetchingIsbn] = useState(false);
   const [isbnCacheStatus, setIsbnCacheStatus] = useState<'fresh' | 'cached' | null>(null);
+  const [isbnProgress, setIsbnProgress] = useState<IsbnQueryProgress | null>(null);
   // ISBN 防抖定时器（扫码枪连续输入时等稳定后再查询）
   const isbnDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -87,6 +86,14 @@ export default function BookManagement() {
     totalStock: 1,
     availableStock: 1,
     status: 'available'
+  });
+
+  // 表单验证错误
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({
+    barcode: '',
+    title: '',
+    author: '',
+    isbn: ''
   });
 
   // 搜索书籍
@@ -120,7 +127,30 @@ export default function BookManagement() {
   const handleBarcodeScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       const barcode = (e.target as HTMLInputElement).value.trim();
-      if (barcode) {
+      processBarcode(barcode);
+      (e.target as HTMLInputElement).value = '';
+      setScanMode(false);
+    }
+  };
+
+  // 处理摄像头扫码结果
+  const handleCameraScan = (barcode: string) => {
+    processBarcode(barcode);
+  };
+
+  // 处理条形码
+  const processBarcode = (barcode: string) => {
+    if (barcode) {
+      // 检查是否是ISBN
+      const cleanBarcode = barcode.replace(/[\s-]/g, '');
+      if (IsbnService.isValidIsbn(cleanBarcode)) {
+        // 是ISBN，自动填充书籍信息
+        setFormData(prev => ({ ...prev, isbn: cleanBarcode }));
+        handleIsbnChange(cleanBarcode);
+        setIsAddDialogOpen(true);
+        toast.success('ISBN扫描成功，正在自动填充书籍信息');
+      } else {
+        // 是普通条形码
         const existingBook = getBookByBarcode(barcode);
         if (existingBook) {
           toast.info(`找到书籍: 《${existingBook.title}》`);
@@ -132,20 +162,69 @@ export default function BookManagement() {
           setIsAddDialogOpen(true);
           toast.success('扫描成功，请完善书籍信息');
         }
-        (e.target as HTMLInputElement).value = '';
-        setScanMode(false);
       }
     }
+  };
+
+  // 加载状态
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 验证表单字段
+  const validateField = (name: string, value: string) => {
+    let error = '';
+    switch (name) {
+      case 'barcode':
+        if (!value.trim()) {
+          error = '条形码不能为空';
+        }
+        break;
+      case 'title':
+        if (!value.trim()) {
+          error = '书名不能为空';
+        }
+        break;
+      case 'author':
+        if (!value.trim()) {
+          error = '作者不能为空';
+        }
+        break;
+      case 'isbn':
+        if (value.trim() && !IsbnService.isValidIsbn(value.replace(/[\s-]/g, ''))) {
+          error = '无效的ISBN格式';
+        }
+        break;
+      default:
+        break;
+    }
+    setFormErrors(prev => ({ ...prev, [name]: error }));
+    return error;
+  };
+
+  // 验证整个表单
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+    
+    errors.barcode = validateField('barcode', formData.barcode || '');
+    errors.title = validateField('title', formData.title || '');
+    errors.author = validateField('author', formData.author || '');
+    if (formData.isbn) {
+      errors.isbn = validateField('isbn', formData.isbn);
+    }
+    
+    setFormErrors(errors);
+    
+    return Object.values(errors).every(error => error === '');
   };
 
   // 提交添加
   const handleAddSubmit = async () => {
     try {
-      if (!formData.barcode || !formData.title || !formData.author) {
-        toast.error('请填写必填项：条形码、书名、作者');
+      if (!validateForm()) {
+        toast.error('请检查并修正表单错误');
         return;
       }
       
+      setIsSubmitting(true);
       await addBook(formData as Omit<Book, 'id' | 'createdAt' | 'updatedAt' | 'borrowCount'>);
       toast.success('书籍添加成功');
       setIsAddDialogOpen(false);
@@ -160,8 +239,16 @@ export default function BookManagement() {
         availableStock: 1,
         status: 'available'
       });
+      setFormErrors({
+        barcode: '',
+        title: '',
+        author: '',
+        isbn: ''
+      });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '添加失败');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -169,12 +256,26 @@ export default function BookManagement() {
   const handleEditSubmit = async () => {
     if (!selectedBook) return;
     try {
+      if (!validateForm()) {
+        toast.error('请检查并修正表单错误');
+        return;
+      }
+      
+      setIsSubmitting(true);
       await updateBook(selectedBook.id, formData);
       toast.success('书籍更新成功');
       setIsEditDialogOpen(false);
       setSelectedBook(null);
+      setFormErrors({
+        barcode: '',
+        title: '',
+        author: '',
+        isbn: ''
+      });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '更新失败');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -182,12 +283,15 @@ export default function BookManagement() {
   const handleDelete = async () => {
     if (!selectedBook) return;
     try {
+      setIsSubmitting(true);
       await deleteBook(selectedBook.id);
       toast.success('书籍删除成功');
       setIsDeleteDialogOpen(false);
       setSelectedBook(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '删除失败');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -202,6 +306,7 @@ export default function BookManagement() {
   const handleIsbnChange = (isbn: string) => {
     setFormData(prev => ({ ...prev, isbn }));
     setIsbnCacheStatus(null);
+    setIsbnProgress(null);
 
     // 清除上一次的防抖定时器
     if (isbnDebounceRef.current) {
@@ -220,13 +325,15 @@ export default function BookManagement() {
       setIsFetchingIsbn(true);
       try {
         // 检查是否是缓存命中
-        const cacheStats = IsbnService.getCacheStats();
+        const cacheStats = await IsbnService.getCacheStats();
         console.log(`[ISBN] 当前缓存大小: ${cacheStats.size}`);
         
-        const bookInfo = await IsbnService.fetchByIsbn(cleanIsbn);
+        const bookInfo = await IsbnService.fetchByIsbn(cleanIsbn, (progress) => {
+          setIsbnProgress(progress);
+        });
         
         // 再次检查缓存状态（因为 fetchByIsbn 可能会更新缓存）
-        const newCacheStats = IsbnService.getCacheStats();
+        const newCacheStats = await IsbnService.getCacheStats();
         if (newCacheStats.size === cacheStats.size && bookInfo) {
           // 缓存大小没变但有结果，说明是缓存命中
           setIsbnCacheStatus('cached');
@@ -246,7 +353,9 @@ export default function BookManagement() {
         }
       } catch (error) {
         console.error('ISBN 查询失败:', error);
-        toast.error('查询失败，请手动填写');
+        const errorType = (error as any).type || 'UNKNOWN_ERROR';
+        const errorMessage = IsbnService.getErrorMessage(errorType);
+        toast.error(errorMessage || '查询失败，请手动填写');
       } finally {
         setIsFetchingIsbn(false);
       }
@@ -278,7 +387,9 @@ export default function BookManagement() {
       }
     } catch (error) {
       console.error('ISBN 刷新失败:', error);
-      toast.error('刷新失败，请稍后重试');
+      const errorType = (error as any).type || 'UNKNOWN_ERROR';
+      const errorMessage = IsbnService.getErrorMessage(errorType);
+      toast.error(errorMessage || '刷新失败，请稍后重试');
     } finally {
       setIsFetchingIsbn(false);
     }
@@ -310,21 +421,21 @@ export default function BookManagement() {
     <div className="space-y-4">
       {/* 工具栏 */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
           {/* 搜索框 */}
-          <div className="relative">
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               placeholder="搜索书名、作者、条形码..."
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
-              className="pl-10 w-64"
+              className="pl-10 w-full"
             />
           </div>
           
           {/* 分类筛选 */}
           <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-32 sm:w-32">
               <SelectValue placeholder="全部分类" />
             </SelectTrigger>
             <SelectContent>
@@ -337,12 +448,12 @@ export default function BookManagement() {
 
           {/* 状态筛选 */}
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-32 sm:w-32">
               <SelectValue placeholder="全部状态" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">全部状态</SelectItem>
-              {Object.entries(statusLabels).map(([key, { label }]) => (
+              {Object.entries(bookStatusLabels).map(([key, { label }]) => (
                 <SelectItem key={key} value={key}>{label}</SelectItem>
               ))}
             </SelectContent>
@@ -359,31 +470,44 @@ export default function BookManagement() {
               }}
             >
               <X className="w-4 h-4 mr-1" />
-              清除筛选
+              清除
             </Button>
           )}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-start sm:justify-end">
           {/* 扫码按钮 */}
           <Button
             variant={scanMode ? "default" : "outline"}
+            size="sm"
             onClick={() => setScanMode(!scanMode)}
+            className="w-full sm:w-auto"
           >
             <ScanLine className="w-4 h-4 mr-2" />
-            {scanMode ? '退出扫码' : '扫码录入'}
+            {scanMode ? '退出扫码' : '扫码'}
+          </Button>
+
+          {/* 摄像头扫码按钮 */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsBarcodeScannerOpen(true)}
+            className="w-full sm:w-auto"
+          >
+            <Camera className="w-4 h-4 mr-2" />
+            摄像头扫码
           </Button>
 
           {/* 导出按钮 */}
-          <Button variant="outline" onClick={handleExport}>
+          <Button variant="outline" size="sm" onClick={handleExport} className="w-full sm:w-auto">
             <Download className="w-4 h-4 mr-2" />
             导出
           </Button>
 
           {/* 添加按钮 */}
-          <Button onClick={() => setIsAddDialogOpen(true)}>
+          <Button size="sm" onClick={() => setIsAddDialogOpen(true)} className="w-full sm:w-auto">
             <Plus className="w-4 h-4 mr-2" />
-            添加书籍
+            添加
           </Button>
         </div>
       </div>
@@ -412,17 +536,17 @@ export default function BookManagement() {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[640px] sm:min-w-[800px]">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">条形码</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">书名</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">作者</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">出版社</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">分类</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">库存</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">状态</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">操作</th>
+                  <th className="px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-500">条形码</th>
+                  <th className="px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-500">书名</th>
+                  <th className="px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-500">作者</th>
+                  <th className="px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">出版社</th>
+                  <th className="px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-500 hidden md:table-cell">分类</th>
+                  <th className="px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-500">库存</th>
+                  <th className="px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-500">状态</th>
+                  <th className="px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-500">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -436,39 +560,40 @@ export default function BookManagement() {
                 ) : (
                   paginatedBooks.map((book) => (
                     <tr key={book.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-mono">{book.barcode}</td>
-                      <td className="px-4 py-3 text-sm font-medium">{book.title}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{book.author}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{book.publisher}</td>
-                      <td className="px-4 py-3 text-sm">
-                        <Badge variant="secondary">
+                      <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm font-mono">{book.barcode}</td>
+                      <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm font-medium">{book.title}</td>
+                      <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm text-gray-600">{book.author}</td>
+                      <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm text-gray-600 hidden sm:table-cell">{book.publisher}</td>
+                      <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm hidden md:table-cell">
+                        <Badge variant="secondary" className="text-xs">
                           {categories.find(c => c.id === book.categoryId)?.name || '未分类'}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm">
                         {book.availableStock} / {book.totalStock}
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 rounded-full text-xs ${statusLabels[book.status]?.color || 'bg-gray-100'}`}>
-                          {statusLabels[book.status]?.label || book.status}
+                      <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm">
+                        <span className={`px-2 py-1 rounded-full text-xs ${bookStatusLabels[book.status]?.color || 'bg-gray-100'}`}>
+                          {bookStatusLabels[book.status]?.label || book.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <div className="flex gap-2">
+                      <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm">
+                        <div className="flex gap-1 sm:gap-2">
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon"
                             onClick={() => openEditDialog(book)}
+                            className="h-8 w-8"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
                           </Button>
                           <Button
                             variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
+                            size="icon"
+                            className="text-red-600 hover:text-red-700 h-8 w-8"
                             onClick={() => openDeleteDialog(book)}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
                           </Button>
                         </div>
                       </td>
@@ -481,8 +606,8 @@ export default function BookManagement() {
 
           {/* 分页 */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t">
-              <p className="text-sm text-gray-500">
+            <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 border-t gap-2 sm:gap-0">
+              <p className="text-xs sm:text-sm text-gray-500">
                 共 {filteredBooks.length} 条记录，第 {currentPage} / {totalPages} 页
               </p>
               <div className="flex gap-2">
@@ -510,37 +635,49 @@ export default function BookManagement() {
 
       {/* 添加书籍弹窗 */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
+        <DialogContent className="max-w-2xl sm:max-w-md max-h-[90vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>添加书籍</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
             <div className="space-y-2">
               <Label>条形码 *</Label>
               <Input
                 value={formData.barcode}
-                onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData({ ...formData, barcode: value });
+                  validateField('barcode', value);
+                }}
                 placeholder="扫描或输入条形码"
+                className={formErrors.barcode ? 'border-red-300 focus:ring-red-500' : ''}
               />
+              {formErrors.barcode && (
+                <p className="text-xs text-red-500 mt-1">{formErrors.barcode}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>
                 ISBN
-                {isFetchingIsbn && <span className="text-xs text-muted-foreground ml-1">查询中...</span>}
+                {isFetchingIsbn && <span className="text-xs text-muted-foreground ml-1 flex items-center"><span className="w-3 h-3 border-2 border-t-transparent border-blue-500 rounded-full animate-spin mr-1"></span>查询中...</span>}
                 {isbnCacheStatus === 'cached' && !isFetchingIsbn && (
-                  <span className="text-xs text-green-600 ml-1">(来自缓存)</span>
+                  <span className="text-xs text-green-600 ml-1 flex items-center"><Check className="w-3 h-3 mr-1" />来自缓存</span>
                 )}
                 {isbnCacheStatus === 'fresh' && !isFetchingIsbn && (
-                  <span className="text-xs text-blue-600 ml-1">(已刷新)</span>
+                  <span className="text-xs text-blue-600 ml-1 flex items-center"><RefreshCw className="w-3 h-3 mr-1" />已刷新</span>
                 )}
               </Label>
               <div className="flex gap-2">
                 <Input
                   value={formData.isbn}
-                  onChange={(e) => handleIsbnChange(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    handleIsbnChange(value);
+                    validateField('isbn', value);
+                  }}
                   placeholder="扫描或输入ISBN号，自动填充书籍信息"
                   disabled={isFetchingIsbn}
-                  className="flex-1"
+                  className={`flex-1 ${formErrors.isbn ? 'border-red-300 focus:ring-red-500' : ''}`}
                 />
                 {formData.isbn && IsbnService.isValidIsbn(formData.isbn.replace(/[-\s]/g, '')) && (
                   <Button
@@ -555,22 +692,79 @@ export default function BookManagement() {
                   </Button>
                 )}
               </div>
-            </div>
-            <div className="space-y-2 col-span-2">
-              <Label>书名 *</Label>
+               {formErrors.isbn && (
+                 <p className="text-xs text-red-500 mt-1">{formErrors.isbn}</p>
+               )}
+               {/* ISBN 查询进度指示器 */}
+               {isbnProgress && !isbnProgress.isComplete && (
+                 <div className="flex flex-wrap gap-1.5 mt-2">
+                   {Object.entries(isbnProgress.sourceStatuses).map(([source, status]) => (
+                     <span
+                       key={source}
+                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-all ${
+                         status === 'querying'
+                           ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                           : status === 'success'
+                           ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                           : status === 'failed' || status === 'timeout'
+                           ? 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500'
+                           : 'bg-gray-50 text-gray-300 dark:bg-gray-800 dark:text-gray-600'
+                       }`}
+                     >
+                       {status === 'querying' && (
+                         <span className="w-2 h-2 border border-blue-500 border-t-transparent rounded-full animate-spin" />
+                       )}
+                       {status === 'success' && '✓'}
+                       {status === 'failed' && '✗'}
+                       {status === 'timeout' && '⏱'}
+                       {status === 'pending' && '○'}
+                       {source === 'NLC' ? '国图' : source === 'DoubanWeb' ? '豆瓣' : source === 'GoogleBooks' ? 'Google' : source === 'OpenLibrary' ? 'OpenLib' : source}
+                     </span>
+                   ))}
+                 </div>
+               )}
+               {/* 查询完成后的结果提示 */}
+               {isbnProgress?.isComplete && isbnProgress.successfulSource && (
+                 <p className="text-xs text-green-600 mt-1 flex items-center">
+                   <Check className="w-3 h-3 mr-1" />
+                   已从 {isbnProgress.successfulSource === 'NLC' ? '国家图书馆' : isbnProgress.successfulSource === 'DoubanWeb' ? '豆瓣' : isbnProgress.successfulSource} 获取
+                 </p>
+               )}
+               {isbnProgress?.isComplete && !isbnProgress.successfulSource && (
+                 <p className="text-xs text-gray-400 mt-1">所有数据源均未找到该 ISBN</p>
+               )}
+             </div>
+             <div className="space-y-2 col-span-2">
+               <Label>书名 *</Label>
               <Input
                 value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData({ ...formData, title: value });
+                  validateField('title', value);
+                }}
                 placeholder="请输入书名"
+                className={formErrors.title ? 'border-red-300 focus:ring-red-500' : ''}
               />
+              {formErrors.title && (
+                <p className="text-xs text-red-500 mt-1">{formErrors.title}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>作者 *</Label>
               <Input
                 value={formData.author}
-                onChange={(e) => setFormData({ ...formData, author: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData({ ...formData, author: value });
+                  validateField('author', value);
+                }}
                 placeholder="请输入作者"
+                className={formErrors.author ? 'border-red-300 focus:ring-red-500' : ''}
               />
+              {formErrors.author && (
+                <p className="text-xs text-red-500 mt-1">{formErrors.author}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>出版社</Label>
@@ -639,44 +833,59 @@ export default function BookManagement() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>取消</Button>
-            <Button onClick={handleAddSubmit}>确认添加</Button>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting}>取消</Button>
+            <Button onClick={handleAddSubmit} disabled={isSubmitting}>
+              {isSubmitting && <span className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></span>}
+              {isSubmitting ? '添加中...' : '确认添加'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* 编辑书籍弹窗 */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
+        <DialogContent className="max-w-2xl sm:max-w-md max-h-[90vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>编辑书籍</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
             <div className="space-y-2">
               <Label>条形码 *</Label>
               <Input
                 value={formData.barcode}
-                onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData({ ...formData, barcode: value });
+                  validateField('barcode', value);
+                }}
+                className={formErrors.barcode ? 'border-red-300 focus:ring-red-500' : ''}
               />
+              {formErrors.barcode && (
+                <p className="text-xs text-red-500 mt-1">{formErrors.barcode}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>
                 ISBN
-                {isFetchingIsbn && <span className="text-xs text-muted-foreground ml-1">查询中...</span>}
+                {isFetchingIsbn && <span className="text-xs text-muted-foreground ml-1 flex items-center"><span className="w-3 h-3 border-2 border-t-transparent border-blue-500 rounded-full animate-spin mr-1"></span>查询中...</span>}
                 {isbnCacheStatus === 'cached' && !isFetchingIsbn && (
-                  <span className="text-xs text-green-600 ml-1">(来自缓存)</span>
+                  <span className="text-xs text-green-600 ml-1 flex items-center"><Check className="w-3 h-3 mr-1" />来自缓存</span>
                 )}
                 {isbnCacheStatus === 'fresh' && !isFetchingIsbn && (
-                  <span className="text-xs text-blue-600 ml-1">(已刷新)</span>
+                  <span className="text-xs text-blue-600 ml-1 flex items-center"><RefreshCw className="w-3 h-3 mr-1" />已刷新</span>
                 )}
               </Label>
               <div className="flex gap-2">
                 <Input
                   value={formData.isbn}
-                  onChange={(e) => handleIsbnChange(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    handleIsbnChange(value);
+                    validateField('isbn', value);
+                  }}
                   placeholder="扫描或输入ISBN号，自动填充书籍信息"
                   disabled={isFetchingIsbn}
-                  className="flex-1"
+                  className={`flex-1 ${formErrors.isbn ? 'border-red-300 focus:ring-red-500' : ''}`}
                 />
                 {formData.isbn && IsbnService.isValidIsbn(formData.isbn.replace(/[-\s]/g, '')) && (
                   <Button
@@ -691,20 +900,77 @@ export default function BookManagement() {
                   </Button>
                 )}
               </div>
-            </div>
-            <div className="space-y-2 col-span-2">
-              <Label>书名 *</Label>
+               {formErrors.isbn && (
+                 <p className="text-xs text-red-500 mt-1">{formErrors.isbn}</p>
+               )}
+               {/* ISBN 查询进度指示器 */}
+               {isbnProgress && !isbnProgress.isComplete && (
+                 <div className="flex flex-wrap gap-1.5 mt-2">
+                   {Object.entries(isbnProgress.sourceStatuses).map(([source, status]) => (
+                     <span
+                       key={source}
+                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-all ${
+                         status === 'querying'
+                           ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                           : status === 'success'
+                           ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                           : status === 'failed' || status === 'timeout'
+                           ? 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500'
+                           : 'bg-gray-50 text-gray-300 dark:bg-gray-800 dark:text-gray-600'
+                       }`}
+                     >
+                       {status === 'querying' && (
+                         <span className="w-2 h-2 border border-blue-500 border-t-transparent rounded-full animate-spin" />
+                       )}
+                       {status === 'success' && '✓'}
+                       {status === 'failed' && '✗'}
+                       {status === 'timeout' && '⏱'}
+                       {status === 'pending' && '○'}
+                       {source === 'NLC' ? '国图' : source === 'DoubanWeb' ? '豆瓣' : source === 'GoogleBooks' ? 'Google' : source === 'OpenLibrary' ? 'OpenLib' : source}
+                     </span>
+                   ))}
+                 </div>
+               )}
+               {/* 查询完成后的结果提示 */}
+               {isbnProgress?.isComplete && isbnProgress.successfulSource && (
+                 <p className="text-xs text-green-600 mt-1 flex items-center">
+                   <Check className="w-3 h-3 mr-1" />
+                   已从 {isbnProgress.successfulSource === 'NLC' ? '国家图书馆' : isbnProgress.successfulSource === 'DoubanWeb' ? '豆瓣' : isbnProgress.successfulSource} 获取
+                 </p>
+               )}
+               {isbnProgress?.isComplete && !isbnProgress.successfulSource && (
+                 <p className="text-xs text-gray-400 mt-1">所有数据源均未找到该 ISBN</p>
+               )}
+             </div>
+             <div className="space-y-2 col-span-2">
+               <Label>书名 *</Label>
               <Input
                 value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData({ ...formData, title: value });
+                  validateField('title', value);
+                }}
+                className={formErrors.title ? 'border-red-300 focus:ring-red-500' : ''}
               />
+              {formErrors.title && (
+                <p className="text-xs text-red-500 mt-1">{formErrors.title}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>作者 *</Label>
               <Input
                 value={formData.author}
-                onChange={(e) => setFormData({ ...formData, author: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData({ ...formData, author: value });
+                  validateField('author', value);
+                }}
+                className={formErrors.author ? 'border-red-300 focus:ring-red-500' : ''}
               />
+              {formErrors.author && (
+                <p className="text-xs text-red-500 mt-1">{formErrors.author}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>出版社</Label>
@@ -739,7 +1005,7 @@ export default function BookManagement() {
                   <SelectValue placeholder="选择状态" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(statusLabels).map(([key, { label }]) => (
+                  {Object.entries(bookStatusLabels).map(([key, { label }]) => (
                     <SelectItem key={key} value={key}>{label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -783,8 +1049,11 @@ export default function BookManagement() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>取消</Button>
-            <Button onClick={handleEditSubmit}>保存修改</Button>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSubmitting}>取消</Button>
+            <Button onClick={handleEditSubmit} disabled={isSubmitting}>
+              {isSubmitting && <span className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></span>}
+              {isSubmitting ? '保存中...' : '保存修改'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -799,11 +1068,21 @@ export default function BookManagement() {
             确定要删除书籍《{selectedBook?.title}》吗？此操作不可恢复。
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>取消</Button>
-            <Button variant="destructive" onClick={handleDelete}>确认删除</Button>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isSubmitting}>取消</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={isSubmitting}>
+              {isSubmitting && <span className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></span>}
+              {isSubmitting ? '删除中...' : '确认删除'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 摄像头扫码弹窗 */}
+      <BarcodeScanner
+        isOpen={isBarcodeScannerOpen}
+        onOpenChange={setIsBarcodeScannerOpen}
+        onScan={handleCameraScan}
+      />
     </div>
   );
 }

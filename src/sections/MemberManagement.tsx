@@ -37,14 +37,9 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { format, addMonths } from 'date-fns';
 import type { Member, MemberType } from '@/types';
+import { memberStatusLabels } from '@/utils/statusLabels';
 
-// 会员状态标签
-const statusLabels: Record<string, { label: string; color: string }> = {
-  active: { label: '有效', color: 'bg-green-100 text-green-700' },
-  expired: { label: '已过期', color: 'bg-red-100 text-red-700' },
-  suspended: { label: '已暂停', color: 'bg-yellow-100 text-yellow-700' },
-  cancelled: { label: '已注销', color: 'bg-gray-100 text-gray-700' }
-};
+// 使用共享的状态标签工具函数
 
 export default function MemberManagement() {
   const { state, addMember, updateMember, deleteMember, searchMembers, getMemberByCardNumber } = useLibrary();
@@ -273,7 +268,7 @@ export default function MemberManagement() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">全部状态</SelectItem>
-              {Object.entries(statusLabels).map(([key, { label }]) => (
+              {Object.entries(memberStatusLabels).map(([key, { label }]) => (
                 <SelectItem key={key} value={key}>{label}</SelectItem>
               ))}
             </SelectContent>
@@ -382,8 +377,8 @@ export default function MemberManagement() {
                         {member.currentBorrowCount} / {member.maxBorrowCount}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 rounded-full text-xs ${statusLabels[member.status]?.color || 'bg-gray-100'}`}>
-                          {statusLabels[member.status]?.label || member.status}
+                        <span className={`px-2 py-1 rounded-full text-xs ${memberStatusLabels[member.status]?.color || 'bg-gray-100'}`}>
+                          {memberStatusLabels[member.status]?.label || member.status}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">
@@ -644,7 +639,7 @@ export default function MemberManagement() {
                   <SelectValue placeholder="选择状态" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(statusLabels).map(([key, { label }]) => (
+                  {Object.entries(memberStatusLabels).map(([key, { label }]) => (
                     <SelectItem key={key} value={key}>{label}</SelectItem>
                   ))}
                 </SelectContent>

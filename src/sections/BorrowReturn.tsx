@@ -27,14 +27,9 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
 import type { Book, Member, BorrowRecord } from '@/types';
+import { borrowStatusLabels } from '@/utils/statusLabels';
 
-// 借阅状态标签
-const statusLabels: Record<string, { label: string; color: string }> = {
-  borrowed: { label: '借阅中', color: 'bg-blue-100 text-blue-700' },
-  returned: { label: '已归还', color: 'bg-green-100 text-green-700' },
-  overdue: { label: '已逾期', color: 'bg-red-100 text-red-700' },
-  renewed: { label: '已续借', color: 'bg-purple-100 text-purple-700' }
-};
+// 使用共享的状态标签工具函数
 
 export default function BorrowReturn() {
   const { 
@@ -503,9 +498,9 @@ export default function BorrowReturn() {
                           <span className={`px-2 py-1 rounded-full text-xs ${
                             isOverdue(record) 
                               ? 'bg-red-100 text-red-700' 
-                              : statusLabels[record.status]?.color || 'bg-gray-100'
+                              : borrowStatusLabels[record.status]?.color || 'bg-gray-100'
                           }`}>
-                            {isOverdue(record) ? '已逾期' : statusLabels[record.status]?.label}
+                            {isOverdue(record) ? '已逾期' : borrowStatusLabels[record.status]?.label}
                           </span>
                         </td>
                         <td className="px-4 py-3">

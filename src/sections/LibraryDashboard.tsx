@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { 
   BookOpen, 
   Users, 
@@ -15,15 +15,15 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
-// 导入各个模块
-import DashboardOverview from './DashboardOverview';
-import BookManagement from './BookManagement';
-import MemberManagement from './MemberManagement';
-import BorrowReturn from './BorrowReturn';
-import DataManagement from './DataManagement';
-import SystemSettings from './SystemSettings';
-import MemberGroupManagement from './MemberGroupManagement';
-import ReadingRanking from './ReadingRanking';
+// 动态导入各个模块
+const DashboardOverview = lazy(() => import('./DashboardOverview'));
+const BookManagement = lazy(() => import('./BookManagement'));
+const MemberManagement = lazy(() => import('./MemberManagement'));
+const BorrowReturn = lazy(() => import('./BorrowReturn'));
+const DataManagement = lazy(() => import('./DataManagement'));
+const SystemSettings = lazy(() => import('./SystemSettings'));
+const MemberGroupManagement = lazy(() => import('./MemberGroupManagement'));
+const ReadingRanking = lazy(() => import('./ReadingRanking'));
 
 // 导航项配置 - 添加渐变色
 const navItems = [
@@ -50,23 +50,95 @@ export default function LibraryDashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardOverview />;
+        return (
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          }>
+            <DashboardOverview />
+          </Suspense>
+        );
       case 'books':
-        return <BookManagement />;
+        return (
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          }>
+            <BookManagement />
+          </Suspense>
+        );
       case 'members':
-        return <MemberManagement />;
+        return (
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          }>
+            <MemberManagement />
+          </Suspense>
+        );
       case 'groups':
-        return <MemberGroupManagement />;
+        return (
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          }>
+            <MemberGroupManagement />
+          </Suspense>
+        );
       case 'borrow':
-        return <BorrowReturn />;
+        return (
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          }>
+            <BorrowReturn />
+          </Suspense>
+        );
       case 'ranking':
-        return <ReadingRanking />;
+        return (
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          }>
+            <ReadingRanking />
+          </Suspense>
+        );
       case 'data':
-        return <DataManagement />;
+        return (
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          }>
+            <DataManagement />
+          </Suspense>
+        );
       case 'settings':
-        return <SystemSettings />;
+        return (
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          }>
+            <SystemSettings />
+          </Suspense>
+        );
       default:
-        return <DashboardOverview />;
+        return (
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          }>
+            <DashboardOverview />
+          </Suspense>
+        );
     }
   };
 

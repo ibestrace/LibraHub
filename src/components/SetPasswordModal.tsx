@@ -41,7 +41,7 @@ export function SetPasswordModal({
 
     try {
       const { OperatorService } = await import('@/services/operator');
-      OperatorService.setPassword(password);
+      await OperatorService.setPassword(password);
       onSet();
       setPassword('');
       setConfirmPassword('');

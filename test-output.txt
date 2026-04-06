@@ -1,0 +1,317 @@
+
+> librahub@0.0.0 test:run
+> vitest run
+
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90mD:/Projects/LibraHub[39m
+
+ [31m❯[39m src/services/storageAdapter.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m src/hooks/useStorageMonitor.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m src/utils/statusLabels.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/utils/idGenerator.test.ts [2m([22m[2m29 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+[90mstderr[2m | src/utils/encryption.test.ts[2m > [22m[2mEncryptionService[2m > [22m[2mencrypt/decrypt[2m > [22m[2mshould throw error for tampered data
+[22m[39m解密失败: DOMException [OperationError]: The operation failed for an operation-specific reason
+[90m    at AESCipherJob.onDone (node:internal/crypto/util:646:19)[39m {
+  [cause]: [Error: Cipher job failed]
+}
+
+[90mstderr[2m | src/services/unifiedStorage.test.ts[2m > [22m[2mUnifiedStorage[2m > [22m[2mlocalStorage Backend - Export/Import[2m > [22m[2mshould handle import errors gracefully
+[22m[39mImport error: SyntaxError: Unexpected token 'i', "invalid json" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at UnifiedStorage.importAll (D:/Projects/LibraHub/src/services/unifiedStorage.ts:444:25)
+    at D:/Projects/LibraHub/src/services/unifiedStorage.test.ts:454:36
+    at [90mfile:///D:/Projects/LibraHub/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:145:11
+    at [90mfile:///D:/Projects/LibraHub/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:915:26
+    at [90mfile:///D:/Projects/LibraHub/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///D:/Projects/LibraHub/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1209:10[90m)[39m
+    at [90mfile:///D:/Projects/LibraHub/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1653:37
+    at Traces.$ [90m(file:///D:/Projects/LibraHub/[39mnode_modules/[4mvitest[24m/dist/chunks/traces.CCmnQaNT.js:142:27[90m)[39m
+
+[90mstderr[2m | src/services/unifiedStorage.test.ts[2m > [22m[2mUnifiedStorage[2m > [22m[2mError Handling[2m > [22m[2mshould handle localStorage read errors
+[22m[39mError reading library_books: Error: Storage error
+    at Object.<anonymous> (D:/Projects/LibraHub/src/services/unifiedStorage.test.ts:479:15)
+    at Object.Mock [as getItem] [90m(file:///D:/Projects/LibraHub/[39mnode_modules/[4m@vitest/spy[24m/dist/index.js:285:34[90m)[39m
+    at UnifiedStorage.getFromLocalStorage (D:/Projects/LibraHub/src/services/unifiedStorage.ts:187:33)
+    at UnifiedStorage.getAll (D:/Projects/LibraHub/src/services/unifiedStorage.ts:102:19)
+    at UnifiedStorage.getBooks (D:/Projects/LibraHub/src/services/unifiedStorage.ts:226:17)
+    at D:/Projects/LibraHub/src/services/unifiedStorage.test.ts:482:35
+    at [90mfile:///D:/Projects/LibraHub/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:145:11
+    at [90mfile:///D:/Projects/LibraHub/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:915:26
+    at [90mfile:///D:/Projects/LibraHub/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+
+[90mstdout[2m | src/services/transaction.test.ts[2m > [22m[2mTransactionManager[2m > [22m[2mBasic Transaction Operations[2m > [22m[2mshould rollback transaction successfully
+[22m[39m开始回滚事务，执行补偿操作...
+事务回滚完成
+
+[90mstderr[2m | src/services/unifiedStorage.test.ts[2m > [22m[2mUnifiedStorage[2m > [22m[2mError Handling[2m > [22m[2mshould throw error when localStorage write fails due to quota
+[22m[39mError writing library_books: Error: QuotaExceededError
+    at Object.<anonymous> (D:/Projects/LibraHub/src/services/unifiedStorage.test.ts:489:15)
+    at Object.Mock [as setItem] [90m(file:///D:/Projects/LibraHub/[39mnode_modules/[4m@vitest/spy[24m/dist/index.js:285:34[90m)[39m
+    at UnifiedStorage.saveToLocalStorage (D:/Projects/LibraHub/src/services/unifiedStorage.ts:197:20)
+    at UnifiedStorage.save (D:/Projects/LibraHub/src/services/unifiedStorage.ts:139:12)
+    at UnifiedStorage.saveBook (D:/Projects/LibraHub/src/services/unifiedStorage.ts:234:17)
+    at D:/Projects/LibraHub/src/services/unifiedStorage.test.ts:507:28
+    at [90mfile:///D:/Projects/LibraHub/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:145:11
+    at [90mfile:///D:/Projects/LibraHub/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:915:26
+    at [90mfile:///D:/Projects/LibraHub/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+
+ [32m✓[39m src/services/referentialIntegrity.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/utils/validation.test.ts [2m([22m[2m41 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/services/unifiedStorage.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m src/utils/encryption.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [31m❯[39m src/services/transaction.test.ts [2m([22m[2m24 tests[22m[2m | [22m[31m15 failed[39m[2m)[22m[32m 30[2mms[22m[39m
+       [32m✓[39m should begin a new transaction[32m 3[2mms[22m[39m
+       [32m✓[39m should throw error when beginning nested transaction[32m 2[2mms[22m[39m
+       [32m✓[39m should commit transaction successfully[32m 1[2mms[22m[39m
+       [32m✓[39m should throw error when committing without active transaction[32m 1[2mms[22m[39m
+       [32m✓[39m should rollback transaction successfully[32m 2[2mms[22m[39m
+       [32m✓[39m should throw error when rolling back without active transaction[32m 1[2mms[22m[39m
+       [32m✓[39m should add operation to current transaction[32m 0[2mms[22m[39m
+       [32m✓[39m should throw error when adding operation without active transaction[32m 1[2mms[22m[39m
+       [32m✓[39m should track multiple operations[32m 0[2mms[22m[39m
+[31m       [31m×[31m should execute rollback operations in reverse order[39m[32m 6[2mms[22m[39m
+[31m       [31m×[31m should continue rollback even if individual operation fails[39m[32m 2[2mms[22m[39m
+[31m       [31m×[31m should successfully borrow a book with transaction[39m[32m 2[2mms[22m[39m
+[31m       [31m×[31m should update book stock correctly[39m[32m 1[2mms[22m[39m
+[31m       [31m×[31m should update member borrow count[39m[32m 1[2mms[22m[39m
+[31m       [31m×[31m should rollback on failure[39m[32m 0[2mms[22m[39m
+[31m       [31m×[31m should mark book as borrowed when stock reaches zero[39m[32m 0[2mms[22m[39m
+[31m       [31m×[31m should successfully return a book with transaction[39m[32m 0[2mms[22m[39m
+[31m       [31m×[31m should update book stock on return[39m[32m 0[2mms[22m[39m
+[31m       [31m×[31m should update member reading stats on return[39m[32m 0[2mms[22m[39m
+[31m       [31m×[31m should handle fine amount[39m[32m 0[2mms[22m[39m
+[31m       [31m×[31m should not allow negative borrow count[39m[32m 0[2mms[22m[39m
+[31m       [31m×[31m should successfully renew a book[39m[32m 0[2mms[22m[39m
+[31m       [31m×[31m should update borrow record status to renewed[39m[32m 0[2mms[22m[39m
+[31m       [31m×[31m should rollback on failure[39m[32m 0[2mms[22m[39m
+[90mstdout[2m | src/services/isbn.test.ts
+[22m[39m[ISBN] 缓存存储方案: localStorage
+
+ [32m✓[39m src/utils/sanitizer.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+[90mstderr[2m | src/services/isbn.test.ts[2m > [22m[2mIsbnService[2m > [22m[2mfetchByIsbn[2m > [22m[2mshould return null for invalid ISBN
+[22m[39m无效的 ISBN 格式
+
+[90mstderr[2m | src/services/isbn.test.ts[2m > [22m[2mIsbnService[2m > [22m[2mfetchByIsbn[2m > [22m[2mshould return null for empty ISBN
+[22m[39m无效的 ISBN 格式
+
+ [32m✓[39m src/services/isbn.test.ts [2m([22m[2m13 tests[22m[2m | [22m[33m1 skipped[39m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/components/ui/button.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 74[2mms[22m[39m
+ [31m❯[39m src/services/storage.test.ts [2m([22m[2m20 tests[22m[2m | [22m[31m20 failed[39m[2m)[22m[32m 12[2mms[22m[39m
+[31m     [31m×[31m 应该正确存储和读取数据[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m 应该返回默认值当键不存在时[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m 应该正确导出所有数据[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m 应该正确导入数据[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该添加新书[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该抛出错误当条形码重复时[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该正确搜索书籍[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该正确更新书籍[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该正确删除书籍[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该返回正确的统计数据[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该添加新会员[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该正确搜索会员[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该成功借书[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该在库存不足时抛出错误[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该在会员达到借阅上限时抛出错误[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该成功还书[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该成功续借[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该在达到最大续借次数时抛出错误[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该返回默认设置[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 应该正确更新设置[39m[32m 0[2mms[22m[39m
+ [32m✓[39m src/hooks/useLibrary.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+ [32m✓[39m src/services/operator.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 360[2mms[22m[39m
+ [32m✓[39m src/sections/DashboardOverview.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 182[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/services/storageAdapter.test.ts[2m [ src/services/storageAdapter.test.ts ][22m
+[31m[1mError[22m: Failed to resolve import "./dataMigration" from "src/services/storageAdapter.test.ts". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mD:/Projects/LibraHub/src/services/storageAdapter.test.ts[39m:4:30
+[33m  1  |  import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+  2  |  import { StorageAdapter, STORES } from "./storageAdapter";
+  3  |  import { DataMigration } from "./dataMigration";
+     |                                 ^
+  4  |  const mockIndexedDB = {
+  5  |    open: vi.fn(),[39m
+[90m [2m❯[22m TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/config.js:[2m28998:43[22m[39m
+[90m [2m❯[22m TransformPluginContext.error node_modules/vite/dist/node/chunks/config.js:[2m28995:14[22m[39m
+[90m [2m❯[22m normalizeUrl node_modules/vite/dist/node/chunks/config.js:[2m27118:18[22m[39m
+[90m [2m❯[22m node_modules/vite/dist/node/chunks/config.js:[2m27176:32[22m[39m
+[90m [2m❯[22m TransformPluginContext.transform node_modules/vite/dist/node/chunks/config.js:[2m27144:4[22m[39m
+[90m [2m❯[22m EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/config.js:[2m28796:14[22m[39m
+[90m [2m❯[22m loadAndTransform node_modules/vite/dist/node/chunks/config.js:[2m22669:26[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/36]⎯[22m[39m
+
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 35 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mStorageService[2m > [22m应该正确存储和读取数据
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mStorageService[2m > [22m应该返回默认值当键不存在时
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mStorageService[2m > [22m应该正确导出所有数据
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mStorageService[2m > [22m应该正确导入数据
+[31m[1mTypeError[22m: Cannot read properties of undefined (reading 'setBackend')[39m
+[36m [2m❯[22m src/services/storage.test.ts:[2m48:20[22m[39m
+    [90m 46| [39m    vi[33m.[39m[34mclearAllMocks[39m()
+    [90m 47| [39m    [90m// 使用 localStorage 模式进行测试[39m
+    [90m 48| [39m    [33mStorageAdapter[39m[33m.[39m[34msetBackend[39m([32m'localStorage'[39m)
+    [90m   | [39m                   [31m^[39m
+    [90m 49| [39m    [35mawait[39m [33mStorageAdapter[39m[33m.[39m[34minit[39m()
+    [90m 50| [39m  })
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/36]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mBookService[2m > [22m应该添加新书
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mBookService[2m > [22m应该抛出错误当条形码重复时
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mBookService[2m > [22m应该正确搜索书籍
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mBookService[2m > [22m应该正确更新书籍
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mBookService[2m > [22m应该正确删除书籍
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mBookService[2m > [22m应该返回正确的统计数据
+[31m[1mTypeError[22m: Cannot read properties of undefined (reading 'setBackend')[39m
+[36m [2m❯[22m src/services/storage.test.ts:[2m109:20[22m[39m
+    [90m107| [39m    mockLocalStorage[33m.[39m[34mclear[39m()
+    [90m108| [39m    vi[33m.[39m[34mclearAllMocks[39m()
+    [90m109| [39m    [33mStorageAdapter[39m[33m.[39m[34msetBackend[39m([32m'localStorage'[39m)
+    [90m   | [39m                   [31m^[39m
+    [90m110| [39m    [35mawait[39m [33mStorageAdapter[39m[33m.[39m[34minit[39m()
+    [90m111| [39m  })
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/36]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mMemberService[2m > [22m应该添加新会员
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mMemberService[2m > [22m应该正确搜索会员
+[31m[1mTypeError[22m: Cannot read properties of undefined (reading 'setBackend')[39m
+[36m [2m❯[22m src/services/storage.test.ts:[2m239:20[22m[39m
+    [90m237| [39m    mockLocalStorage[33m.[39m[34mclear[39m()
+    [90m238| [39m    vi[33m.[39m[34mclearAllMocks[39m()
+    [90m239| [39m    [33mStorageAdapter[39m[33m.[39m[34msetBackend[39m([32m'localStorage'[39m)
+    [90m   | [39m                   [31m^[39m
+    [90m240| [39m    [35mawait[39m [33mStorageAdapter[39m[33m.[39m[34minit[39m()
+    [90m241| [39m  })
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/36]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mBorrowService[2m > [22m应该成功借书
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mBorrowService[2m > [22m应该在库存不足时抛出错误
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mBorrowService[2m > [22m应该在会员达到借阅上限时抛出错误
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mBorrowService[2m > [22m应该成功还书
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mBorrowService[2m > [22m应该成功续借
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mBorrowService[2m > [22m应该在达到最大续借次数时抛出错误
+[31m[1mTypeError[22m: Cannot read properties of undefined (reading 'setBackend')[39m
+[36m [2m❯[22m src/services/storage.test.ts:[2m302:20[22m[39m
+    [90m300| [39m    mockLocalStorage[33m.[39m[34mclear[39m()
+    [90m301| [39m    vi[33m.[39m[34mclearAllMocks[39m()
+    [90m302| [39m    [33mStorageAdapter[39m[33m.[39m[34msetBackend[39m([32m'localStorage'[39m)
+    [90m   | [39m                   [31m^[39m
+    [90m303| [39m    [35mawait[39m [33mStorageAdapter[39m[33m.[39m[34minit[39m()
+    [90m304| [39m  })
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/36]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mSettingsService[2m > [22m应该返回默认设置
+[41m[1m FAIL [22m[49m src/services/storage.test.ts[2m > [22mSettingsService[2m > [22m应该正确更新设置
+[31m[1mTypeError[22m: Cannot read properties of undefined (reading 'setBackend')[39m
+[36m [2m❯[22m src/services/storage.test.ts:[2m594:20[22m[39m
+    [90m592| [39m    mockLocalStorage[33m.[39m[34mclear[39m()
+    [90m593| [39m    vi[33m.[39m[34mclearAllMocks[39m()
+    [90m594| [39m    [33mStorageAdapter[39m[33m.[39m[34msetBackend[39m([32m'localStorage'[39m)
+    [90m   | [39m                   [31m^[39m
+    [90m595| [39m    [35mawait[39m [33mStorageAdapter[39m[33m.[39m[34minit[39m()
+    [90m596| [39m  })
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/36]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mTransactionManager[2m > [22mRollback Operations[2m > [22mshould execute rollback operations in reverse order
+[31m[1mTypeError[22m: __vite_ssr_import_0__.vi.mocked(...).mockImplementation is not a function[39m
+[36m [2m❯[22m src/services/transaction.test.ts:[2m121:42[22m[39m
+    [90m119| [39m      [90m// Setup mock implementations[39m
+    [90m120| [39m      [35mlet[39m callOrder[33m:[39m string[] [33m=[39m [][33m;[39m
+    [90m121| [39m      vi.mocked(IndexedDbService.delete).mockImplementation(async () =…
+    [90m   | [39m                                         [31m^[39m
+    [90m122| [39m        callOrder[33m.[39m[34mpush[39m([32m'delete'[39m)[33m;[39m
+    [90m123| [39m      })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/36]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mTransactionManager[2m > [22mRollback Operations[2m > [22mshould continue rollback even if individual operation fails
+[31m[1mTypeError[22m: __vite_ssr_import_0__.vi.mocked(...).mockRejectedValueOnce is not a function[39m
+[36m [2m❯[22m src/services/transaction.test.ts:[2m155:10[22m[39m
+    [90m153| [39m      
+    [90m154| [39m      vi[33m.[39m[34mmocked[39m([33mIndexedDbService[39m[33m.[39m[35mdelete[39m)
+    [90m155| [39m        [33m.[39m[34mmockRejectedValueOnce[39m([35mnew[39m [33mError[39m([32m'Delete failed'[39m))
+    [90m   | [39m         [31m^[39m
+    [90m156| [39m        [33m.[39m[34mmockResolvedValueOnce[39m(undefined)[33m;[39m
+    [90m157| [39m      
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/36]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mBorrow/Return/Renew Transactions[2m > [22mborrowBookWithTransaction[2m > [22mshould successfully borrow a book with transaction
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mBorrow/Return/Renew Transactions[2m > [22mborrowBookWithTransaction[2m > [22mshould update book stock correctly
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mBorrow/Return/Renew Transactions[2m > [22mborrowBookWithTransaction[2m > [22mshould update member borrow count
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mBorrow/Return/Renew Transactions[2m > [22mborrowBookWithTransaction[2m > [22mshould rollback on failure
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mBorrow/Return/Renew Transactions[2m > [22mborrowBookWithTransaction[2m > [22mshould mark book as borrowed when stock reaches zero
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mBorrow/Return/Renew Transactions[2m > [22mreturnBookWithTransaction[2m > [22mshould successfully return a book with transaction
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mBorrow/Return/Renew Transactions[2m > [22mreturnBookWithTransaction[2m > [22mshould update book stock on return
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mBorrow/Return/Renew Transactions[2m > [22mreturnBookWithTransaction[2m > [22mshould update member reading stats on return
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mBorrow/Return/Renew Transactions[2m > [22mreturnBookWithTransaction[2m > [22mshould handle fine amount
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mBorrow/Return/Renew Transactions[2m > [22mreturnBookWithTransaction[2m > [22mshould not allow negative borrow count
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mBorrow/Return/Renew Transactions[2m > [22mrenewBookWithTransaction[2m > [22mshould successfully renew a book
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mBorrow/Return/Renew Transactions[2m > [22mrenewBookWithTransaction[2m > [22mshould update borrow record status to renewed
+[41m[1m FAIL [22m[49m src/services/transaction.test.ts[2m > [22mBorrow/Return/Renew Transactions[2m > [22mrenewBookWithTransaction[2m > [22mshould rollback on failure
+[31m[1mTypeError[22m: __vite_ssr_import_0__.vi.mocked(...).mockResolvedValue is not a function[39m
+[36m [2m❯[22m src/services/transaction.test.ts:[2m240:37[22m[39m
+    [90m238| [39m  [34mbeforeEach[39m(() [33m=>[39m {
+    [90m239| [39m    vi[33m.[39m[34mclearAllMocks[39m()[33m;[39m
+    [90m240| [39m    vi[33m.[39m[34mmocked[39m([33mIndexedDbService[39m[33m.[39madd)[33m.[39m[34mmockResolvedValue[39m({} [35mas[39m any)[33m;[39m
+    [90m   | [39m                                    [31m^[39m
+    [90m241| [39m    vi[33m.[39m[34mmocked[39m([33mIndexedDbService[39m[33m.[39mupdate)[33m.[39m[34mmockResolvedValue[39m({} [35mas[39m any)[33m;[39m
+    [90m242| [39m    vi[33m.[39m[34mmocked[39m([33mIndexedDbService[39m[33m.[39mgetById)[33m.[39m[34mmockResolvedValue[39m(undefined)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/36]⎯[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Unhandled Errors [49m[22m[31m⎯⎯⎯⎯⎯⎯[39m
+[31m[1m
+Vitest caught 2 unhandled errors during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.[22m[39m
+
+[31m⎯⎯⎯⎯[39m[1m[41m Unhandled Rejection [49m[22m[31m⎯⎯⎯⎯⎯[39m
+[31m[1mTypeError[22m: Cannot set properties of undefined (setting 'onerror')[39m
+[36m [2m❯[22m src/services/indexedDb.ts:[2m71:15[22m[39m
+    [90m 69| [39m      [35mconst[39m request [33m=[39m indexedDB[33m.[39m[34mopen[39m([33mDB_NAME[39m[33m,[39m [33mDB_VERSION[39m)[33m;[39m
+    [90m 70| [39m
+    [90m 71| [39m      request[33m.[39monerror [33m=[39m () [33m=>[39m {
+    [90m   | [39m              [31m^[39m
+    [90m 72| [39m        console[33m.[39m[34merror[39m([32m'IndexedDB 打开失败:'[39m[33m,[39m request[33m.[39merror)[33m;[39m
+    [90m 73| [39m        [34mreject[39m(request[33m.[39merror)[33m;[39m
+[90m [2m❯[22m IndexedDbService.init src/services/indexedDb.ts:[2m68:24[22m[39m
+[90m [2m❯[22m UnifiedStorage.initIndexedDB src/services/unifiedStorage.ts:[2m72:28[22m[39m
+[90m [2m❯[22m processTicksAndRejections node:internal/process/task_queues:[2m104:5[22m[39m
+
+[31mThis error originated in "[1msrc/services/unifiedStorage.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+
+[31m⎯⎯⎯⎯[39m[1m[41m Unhandled Rejection [49m[22m[31m⎯⎯⎯⎯⎯[39m
+[31m[1mTypeError[22m: Cannot set properties of undefined (setting 'onerror')[39m
+[36m [2m❯[22m src/services/indexedDb.ts:[2m71:15[22m[39m
+    [90m 69| [39m      [35mconst[39m request [33m=[39m indexedDB[33m.[39m[34mopen[39m([33mDB_NAME[39m[33m,[39m [33mDB_VERSION[39m)[33m;[39m
+    [90m 70| [39m
+    [90m 71| [39m      request[33m.[39monerror [33m=[39m () [33m=>[39m {
+    [90m   | [39m              [31m^[39m
+    [90m 72| [39m        console[33m.[39m[34merror[39m([32m'IndexedDB 打开失败:'[39m[33m,[39m request[33m.[39merror)[33m;[39m
+    [90m 73| [39m        [34mreject[39m(request[33m.[39merror)[33m;[39m
+[90m [2m❯[22m IndexedDbService.init src/services/indexedDb.ts:[2m68:24[22m[39m
+[90m [2m❯[22m UnifiedStorage.initIndexedDB src/services/unifiedStorage.ts:[2m72:28[22m[39m
+[90m [2m❯[22m processTicksAndRejections node:internal/process/task_queues:[2m104:5[22m[39m
+
+[31mThis error originated in "[1msrc/services/unifiedStorage.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+[31m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39m
+
+
+[2m Test Files [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m13 passed[39m[22m[90m (16)[39m
+[2m      Tests [22m [1m[31m35 failed[39m[22m[2m | [22m[1m[32m220 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (256)[39m
+[2m     Errors [22m [1m[31m2 errors[39m[22m
+[2m   Start at [22m 15:43:22
+[2m   Duration [22m 4.69s[2m (transform 2.78s, setup 5.26s, import 8.68s, tests 928ms, environment 19.26s)[22m
+

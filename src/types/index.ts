@@ -13,11 +13,12 @@ export type BorrowStatus = 'borrowed' | 'returned' | 'overdue' | 'renewed';
 export interface BookCategory {
   id: string;
   name: string;
-  code: string;
+  code?: string;
   parentId?: string;
   description?: string;
+  sortOrder?: number;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 // 书籍信息
@@ -111,6 +112,7 @@ export interface BorrowRecord {
   fineReason?: string;          // 罚款原因
   notes?: string;               // 备注
   operator: string;             // 操作员
+  returnOperator?: string;      // 归还操作员
   wordCount?: number;           // 阅读字数（归还时记录）
   readingYearMonth?: string;    // 阅读月份（归还时记录，格式：YYYY-MM）
   wordCountInputAt?: string;    // 字数录入时间（如果归还时手动录入）
@@ -155,6 +157,8 @@ export interface SystemSettings {
   renewDays: number;
   overdueFinePerDay: number;
   allowOverdueBorrow: boolean;
+  barcodePrefix?: string;
+  memberCardPrefix?: string;
   backupPath?: string;
   lastBackupAt?: string;
 }

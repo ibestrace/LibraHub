@@ -75,7 +75,7 @@ describe('DashboardOverview', () => {
     )
     
     expect(screen.getByText('运行正常')).toBeInTheDocument()
-    expect(screen.getByText('运行正常')).toHaveClass('text-green-600')
+    expect(screen.getByText('运行正常')).toHaveClass('text-emerald-600')
   })
 
   it('应该显示欢迎信息', () => {

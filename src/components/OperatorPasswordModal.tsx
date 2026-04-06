@@ -37,7 +37,8 @@ export function OperatorPasswordModal({
 
     const { OperatorService } = await import('@/services/operator');
     
-    if (OperatorService.verify(password)) {
+    const isValid = await OperatorService.verify(password);
+    if (isValid) {
       onVerified();
       setPassword('');
       onOpenChange(false);

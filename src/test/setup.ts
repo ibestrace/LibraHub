@@ -34,11 +34,31 @@ Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
 });
 
-// 清理测试环境
-afterEach(() => {
-  cleanup();
-  vi.clearAllMocks();
-  localStorageMock.clear();
+// 模拟 IndexedDB - jsdom 不支持 IndexedDB
+// 使用非 vi.fn 的方式确保不会被 clearAllMocks 清除
+function createIDBRequestMock() {
+  return {
+    onerror: null as (() => void) | null,
+    onsuccess: null as (() => void) | null,
+    onupgradeneeded: null as (() => void) | null,
+    result: null,
+    error: null,
+  };
+}
+
+const mockIndexedDB = {
+  open: () => createIDBRequestMock(),
+  deleteDatabase: () => ({
+    onerror: null,
+    onsuccess: null,
+    onblocked: null,
+  }),
+};
+
+Object.defineProperty(globalThis, 'indexedDB', {
+  value: mockIndexedDB,
+  writable: true,
+  configurable: true,
 });
 
 // 重置 localStorage 模拟

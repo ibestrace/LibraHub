@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>本地ISBN数据库查询</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #f0f0f0;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>本地ISBN数据库查询</h1>
+  <button id="queryButton">查询书籍数量</button>
+  <div class="result" id="result"></div>
+
+  <script type="module">
+    // 从服务中导入 isbnCache
+    import { isbnCache } from './src/services/isbn/cache.ts';
+
+    // 查询本地数据库统计信息
+    async function getLocalDatabaseCount() {
+      const resultElement = document.getElementById('result');
+      try {
+        const stats = await isbnCache.getLocalDatabaseStats();
+        resultElement.textContent = `本地ISBN数据库收录了 ${stats.size} 本书籍信息`;
+        console.log(`本地ISBN数据库收录了 ${stats.size} 本书籍信息`);
+      } catch (error) {
+        console.error('查询本地数据库失败:', error);
+        resultElement.textContent = '本地ISBN数据库收录了 0 本书籍信息';
+        console.log('本地ISBN数据库收录了 0 本书籍信息');
+      }
+    }
+
+    // 绑定按钮点击事件
+    document.getElementById('queryButton').addEventListener('click', getLocalDatabaseCount);
+  </script>
+</body>
+</html>

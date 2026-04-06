@@ -1,5 +1,5 @@
 // 图书馆全局状态管理
-import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useMemo } from 'react';
 import type { Book, Member, MemberType, BorrowRecord, BookCategory, SystemSettings } from '@/types';
 import {
   BookService,
@@ -34,28 +34,34 @@ interface LibraryState {
   error: string | null;
 }
 
-// 初始状态
-const initialState: LibraryState = {
-  books: BookService.getAll(),
-  members: MemberService.getAll(),
-  memberTypes: MemberTypeService.getAll(),
-  borrowRecords: BorrowService.getAll(),
-  categories: CategoryService.getAll(),
-  settings: SettingsService.get(),
-  statistics: {
-    totalBooks: 0,
-    totalMembers: 0,
-    activeMembers: 0,
-    totalBorrows: 0,
-    currentBorrows: 0,
-    overdueBorrows: 0,
-    todayBorrows: 0,
-    todayReturns: 0,
-    newMembersThisMonth: 0
-  },
-  loading: false,
-  error: null
-};
+  // 初始状态
+  const initialState: LibraryState = {
+    books: [],
+    members: [],
+    memberTypes: [],
+    borrowRecords: [],
+    categories: [],
+    settings: {
+      libraryName: 'LibraHub 图书馆',
+      maxBorrowDays: 30,
+      maxRenewTimes: 2,
+      overdueFinePerDay: 1,
+      allowOverdueBorrow: false
+    } as SystemSettings,
+    statistics: {
+      totalBooks: 0,
+      totalMembers: 0,
+      activeMembers: 0,
+      totalBorrows: 0,
+      currentBorrows: 0,
+      overdueBorrows: 0,
+      todayBorrows: 0,
+      todayReturns: 0,
+      newMembersThisMonth: 0
+    },
+    loading: false,
+    error: null
+  };
 
 // Action 类型
 type Action =
@@ -68,7 +74,8 @@ type Action =
   | { type: 'SET_CATEGORIES'; payload: BookCategory[] }
   | { type: 'SET_SETTINGS'; payload: SystemSettings }
   | { type: 'UPDATE_STATISTICS' }
-  | { type: 'REFRESH_ALL' };
+  | { type: 'REFRESH_ALL' }
+  | { type: 'INIT_DATA' };
 
 // Reducer
 function libraryReducer(state: LibraryState, action: Action): LibraryState {
@@ -126,6 +133,16 @@ function libraryReducer(state: LibraryState, action: Action): LibraryState {
         categories: CategoryService.getAll(),
         settings: SettingsService.get()
       };
+    case 'INIT_DATA':
+      return {
+        ...state,
+        books: BookService.getAll(),
+        members: MemberService.getAll(),
+        memberTypes: MemberTypeService.getAll(),
+        borrowRecords: BorrowService.getAll(),
+        categories: CategoryService.getAll(),
+        settings: SettingsService.get()
+      };
     default:
       return state;
   }
@@ -162,6 +179,10 @@ interface LibraryContextType {
   exportData: () => string;
   importData: (data: string) => boolean;
   refreshData: () => void;
+  // 辅助方法
+  getBookById: (id: string) => Book | undefined;
+  getMemberById: (id: string) => Member | undefined;
+  getCategoryById: (id: string) => BookCategory | undefined;
 }
 
 const LibraryContext = createContext<LibraryContextType | undefined>(undefined);
@@ -172,7 +193,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
 
   // 初始化数据
   useEffect(() => {
-    dispatch({ type: 'REFRESH_ALL' });
+    dispatch({ type: 'INIT_DATA' });
     dispatch({ type: 'UPDATE_STATISTICS' });
   }, []);
 
@@ -230,6 +251,10 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     return BookService.getByBarcode(barcode);
   }, []);
 
+  const getBookById = useCallback((id: string) => {
+    return state.books.find(book => book.id === id);
+  }, [state.books]);
+
   // 会员操作
   const addMember = useCallback(async (member: Omit<Member, 'id' | 'createdAt' | 'updatedAt' | 'currentBorrowCount' | 'totalReadingWords'>) => {
     dispatch({ type: 'SET_LOADING', payload: true });
@@ -283,6 +308,10 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   const getMemberByCardNumber = useCallback((cardNumber: string) => {
     return MemberService.getByCardNumber(cardNumber);
   }, []);
+
+  const getMemberById = useCallback((id: string) => {
+    return state.members.find(member => member.id === id);
+  }, [state.members]);
 
   // 借阅操作
   const borrowBook = useCallback(async (params: { bookId: string; memberId: string; operator: string }) => {
@@ -356,6 +385,10 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     return result;
   }, []);
 
+  const getCategoryById = useCallback((id: string) => {
+    return state.categories.find(category => category.id === id);
+  }, [state.categories]);
+
   // 设置操作
   const updateSettings = useCallback(async (settings: Partial<SystemSettings>) => {
     const updated = SettingsService.update(settings);
@@ -382,7 +415,8 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'UPDATE_STATISTICS' });
   }, []);
 
-  const value: LibraryContextType = {
+  // 优化：使用 useMemo 缓存计算结果
+  const value: LibraryContextType = useMemo(() => ({
     state,
     dispatch,
     addBook,
@@ -390,11 +424,13 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     deleteBook,
     searchBooks,
     getBookByBarcode,
+    getBookById,
     addMember,
     updateMember,
     deleteMember,
     searchMembers,
     getMemberByCardNumber,
+    getMemberById,
     borrowBook,
     returnBook,
     renewBook,
@@ -402,11 +438,38 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     addCategory,
     updateCategory,
     deleteCategory,
+    getCategoryById,
     updateSettings,
     exportData,
     importData,
     refreshData
-  };
+  }), [
+    state,
+    addBook,
+    updateBook,
+    deleteBook,
+    searchBooks,
+    getBookByBarcode,
+    getBookById,
+    addMember,
+    updateMember,
+    deleteMember,
+    searchMembers,
+    getMemberByCardNumber,
+    getMemberById,
+    borrowBook,
+    returnBook,
+    renewBook,
+    getOverdueBorrows,
+    addCategory,
+    updateCategory,
+    deleteCategory,
+    getCategoryById,
+    updateSettings,
+    exportData,
+    importData,
+    refreshData
+  ]);
 
   return (
     <LibraryContext.Provider value={value}>

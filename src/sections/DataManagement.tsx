@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLibrary } from '@/hooks/useLibrary';
 import { OperatorService } from '@/services/operator';
+import { IsbnService } from '@/services/isbn';
 import {
   Download,
   Upload,
@@ -9,7 +10,14 @@ import {
   AlertTriangle,
   HardDrive,
   TestTube2,
-  Lock
+  Lock,
+  BookOpen,
+  FileSpreadsheet,
+  CheckCircle,
+  XCircle,
+  Loader2,
+  Plus,
+  Search
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -20,13 +28,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { OperatorPasswordModal } from '@/components/OperatorPasswordModal';
 import { SetPasswordModal } from '@/components/SetPasswordModal';
+import type { Book } from '@/types';
 
 export default function DataManagement() {
-  const { state, exportData, importData } = useLibrary();
+  const { state, exportData, importData, addBook } = useLibrary();
   const { statistics } = state;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -39,6 +49,19 @@ export default function DataManagement() {
   const [isSetPasswordModalOpen, setIsSetPasswordModalOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [isPasswordSet, setIsPasswordSet] = useState(false);
+
+  // ISBN 批量导入状态
+  const [isIsbnImportOpen, setIsIsbnImportOpen] = useState(false);
+  const [isbnTextInput, setIsbnTextInput] = useState('');
+  const [isbnImportResults, setIsbnImportResults] = useState<Array<{
+    isbn: string;
+    originalIsbn: string;
+    result: Partial<Book> | null;
+    error: string | null;
+    status: 'pending' | 'processing' | 'success' | 'failed';
+  }>>([]);
+  const [isIsbnProcessing, setIsIsbnProcessing] = useState(false);
+  const isbnFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setIsPasswordSet(OperatorService.isPasswordSet());
@@ -318,6 +341,142 @@ export default function DataManagement() {
     }
   };
 
+  // ==================== ISBN 批量导入 ====================
+
+  // 处理 ISBN 文本输入（每行一个 ISBN）
+  const handleIsbnTextInput = async () => {
+    const isbns = isbnTextInput
+      .split(/[\n,;，；]/)
+      .map(line => line.trim())
+      .filter(Boolean);
+
+    if (isbns.length === 0) {
+      toast.error('请输入至少一个 ISBN');
+      return;
+    }
+
+    if (isbns.length > 50) {
+      toast.error('单次最多处理 50 个 ISBN');
+      return;
+    }
+
+    setIsIsbnProcessing(true);
+    setIsbnImportResults(isbns.map(isbn => ({
+      isbn,
+      originalIsbn: isbn,
+      result: null,
+      error: null,
+      status: 'pending' as const,
+    })));
+
+    // 更新状态为 processing
+    setIsbnImportResults(prev => prev.map(item => ({ ...item, status: 'processing' as const })));
+
+    try {
+      const results = await IsbnService.batchProcessIsbns(isbns, 3);
+      
+      setIsbnImportResults(results.map(r => ({
+        ...r,
+        status: r.result ? 'success' as const : 'failed' as const,
+      })));
+
+      const successCount = results.filter(r => r.result).length;
+      const failCount = results.filter(r => !r.result).length;
+      
+      toast.success(`查询完成：${successCount} 个成功，${failCount} 个失败`);
+    } catch (error) {
+      toast.error('批量查询失败：' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setIsIsbnProcessing(false);
+    }
+  };
+
+  // 处理 CSV 文件导入
+  const handleIsbnCsvFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        // 解析 CSV：支持逗号、制表符分隔
+        const lines = text.split(/[\r\n]+/).filter(Boolean);
+        const isbns: string[] = [];
+        
+        for (const line of lines) {
+          // 跳过表头
+          if (line.toLowerCase().includes('isbn') && isbns.length === 0) continue;
+          
+          const cols = line.split(/[,\t;，；]/);
+          for (const col of cols) {
+            const cleaned = col.trim().replace(/["'\s]/g, '');
+            if (cleaned && /^\d{9}[\dXx]$|^\d{13}$/.test(cleaned)) {
+              isbns.push(cleaned);
+            }
+          }
+        }
+
+        if (isbns.length === 0) {
+          toast.error('CSV 文件中未找到有效的 ISBN');
+          return;
+        }
+
+        setIsbnTextInput(isbns.join('\n'));
+        toast.success(`已解析 ${isbns.length} 个 ISBN`);
+      } catch (error) {
+        toast.error('CSV 解析失败');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  // 将查询成功的书籍添加到图书馆
+  const handleAddIsbnBooks = () => {
+    const successResults = isbnImportResults.filter(r => r.result && r.status === 'success');
+    
+    let addedCount = 0;
+    let skippedCount = 0;
+
+    for (const item of successResults) {
+      if (!item.result) continue;
+      
+      const bookInfo = item.result;
+      // 生成条形码
+      const barcode = `ISBN_${item.isbn}`;
+
+      // 检查是否已存在
+      const existingBook = state.books.find((b: Book) => b.isbn === item.isbn);
+      if (existingBook) {
+        skippedCount++;
+        continue;
+      }
+
+      addBook({
+        barcode,
+        isbn: item.isbn,
+        title: bookInfo.title || '未知书名',
+        author: bookInfo.author || '',
+        publisher: bookInfo.publisher || '',
+        publishDate: bookInfo.publishDate || '',
+        pageCount: bookInfo.pageCount || 0,
+        price: bookInfo.price || undefined,
+        cover: bookInfo.cover || '',
+        categoryId: '',
+        status: 'available',
+        totalStock: 1,
+        availableStock: 1,
+      });
+      addedCount++;
+    }
+
+    toast.success(`已添加 ${addedCount} 本书${skippedCount > 0 ? `，跳过 ${skippedCount} 本已存在的` : ''}`);
+    setIsIsbnImportOpen(false);
+    setIsbnTextInput('');
+    setIsbnImportResults([]);
+  };
+
   return (
     <div className="space-y-6">
       {/* 数据概览 */}
@@ -485,6 +644,39 @@ export default function DataManagement() {
         </CardContent>
       </Card>
 
+      {/* ISBN 批量导入 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-indigo-600">
+            <BookOpen className="w-5 h-5" />
+            ISBN 批量导入
+          </CardTitle>
+          <CardDescription>
+            通过 ISBN 批量查询书籍信息并添加到图书馆
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-lg mb-4">
+            <div className="text-sm text-indigo-800">
+              <p className="font-medium mb-2">支持以下方式：</p>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>手动输入 ISBN（每行一个，支持逗号/分号分隔）</li>
+                <li>上传 CSV 文件（自动识别 ISBN 列）</li>
+                <li>单次最多处理 50 个 ISBN</li>
+                <li>自动查询 5 个数据源，智能填充书籍信息</li>
+              </ul>
+            </div>
+          </div>
+          <Button
+            onClick={() => setIsIsbnImportOpen(true)}
+            className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            ISBN 批量导入
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* 测试数据初始化 */}
       <Card>
         <CardHeader>
@@ -628,6 +820,288 @@ export default function DataManagement() {
             <Button variant="outline" onClick={() => setIsTestDialogOpen(false)}>取消</Button>
             <Button onClick={handleInitTestData} className="bg-purple-600 hover:bg-purple-700">
               确认初始化
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ISBN 批量导入弹窗 */}
+      <Dialog open={isIsbnImportOpen} onOpenChange={setIsIsbnImportOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-indigo-600">
+              <BookOpen className="w-5 h-5" />
+              ISBN 批量导入
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>输入 ISBN（每行一个，支持逗号/分号分隔）</Label>
+              <textarea
+                value={isbnTextInput}
+                onChange={(e) => setIsbnTextInput(e.target.value)}
+                placeholder={"9787111123456\n9787111234567\n9787111345678"}
+                className="w-full min-h-[120px] px-3 py-2 text-sm border rounded-md bg-background resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                disabled={isIsbnProcessing}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>或上传 CSV 文件</Label>
+              <input
+                ref={isbnFileInputRef}
+                type="file"
+                accept=".csv,.txt"
+                onChange={handleIsbnCsvFile}
+                className="hidden"
+              />
+              <Button
+                variant="outline"
+                onClick={() => isbnFileInputRef.current?.click()}
+                disabled={isIsbnProcessing}
+                className="w-full"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                选择 CSV 文件
+              </Button>
+            </div>
+
+            <Button
+              onClick={handleIsbnTextInput}
+              disabled={isIsbnProcessing || !isbnTextInput.trim()}
+              className="w-full bg-indigo-600 hover:bg-indigo-700"
+            >
+              {isIsbnProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  查询中...
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4 mr-2" />
+                  开始查询
+                </>
+              )}
+            </Button>
+
+            {isbnImportResults.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>查询结果</Label>
+                  <div className="flex gap-2">
+                    <span className="text-xs text-green-600">
+                      ✓ {isbnImportResults.filter(r => r.status === 'success').length}
+                    </span>
+                    <span className="text-xs text-red-500">
+                      ✗ {isbnImportResults.filter(r => r.status === 'failed').length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="max-h-[200px] overflow-y-auto space-y-1">
+                  {isbnImportResults.map((item, index) => (
+                    <div
+                      key={index}
+                      className={`flex items-center justify-between p-2 rounded-md text-sm ${
+                        item.status === 'success'
+                          ? 'bg-green-50 border border-green-200'
+                          : item.status === 'failed'
+                          ? 'bg-red-50 border border-red-200'
+                          : item.status === 'processing'
+                          ? 'bg-blue-50 border border-blue-200'
+                          : 'bg-gray-50 border border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {item.status === 'processing' && (
+                          <Loader2 className="w-3 h-3 animate-spin text-blue-500 shrink-0" />
+                        )}
+                        {item.status === 'success' && (
+                          <CheckCircle className="w-3 h-3 text-green-500 shrink-0" />
+                        )}
+                        {item.status === 'failed' && (
+                          <XCircle className="w-3 h-3 text-red-500 shrink-0" />
+                        )}
+                        {item.status === 'pending' && (
+                          <span className="w-3 h-3 rounded-full bg-gray-300 shrink-0" />
+                        )}
+                        <span className="truncate font-mono text-xs">{item.isbn}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                        {item.status === 'success' && item.result?.title
+                          ? item.result.title.slice(0, 15)
+                          : item.status === 'failed'
+                          ? item.error || '查询失败'
+                          : item.status === 'processing'
+                          ? '查询中...'
+                          : '等待中'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {isbnImportResults.some(r => r.status === 'success') && !isIsbnProcessing && (
+                  <Button
+                    onClick={handleAddIsbnBooks}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    添加 {isbnImportResults.filter(r => r.status === 'success').length} 本书到图书馆
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsIsbnImportOpen(false);
+              setIsbnTextInput('');
+              setIsbnImportResults([]);
+            }}>
+              关闭
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ISBN 批量导入弹窗 */}
+      <Dialog open={isIsbnImportOpen} onOpenChange={setIsIsbnImportOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-indigo-600">
+              <BookOpen className="w-5 h-5" />
+              ISBN 批量导入
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>输入 ISBN（每行一个，支持逗号/分号分隔）</Label>
+              <textarea
+                value={isbnTextInput}
+                onChange={(e) => setIsbnTextInput(e.target.value)}
+                placeholder={"9787111123456\n9787111234567\n9787111345678"}
+                className="w-full min-h-[120px] px-3 py-2 text-sm border rounded-md bg-background resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                disabled={isIsbnProcessing}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>或上传 CSV 文件</Label>
+              <input
+                ref={isbnFileInputRef}
+                type="file"
+                accept=".csv,.txt"
+                onChange={handleIsbnCsvFile}
+                className="hidden"
+              />
+              <Button
+                variant="outline"
+                onClick={() => isbnFileInputRef.current?.click()}
+                disabled={isIsbnProcessing}
+                className="w-full"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                选择 CSV 文件
+              </Button>
+            </div>
+
+            <Button
+              onClick={handleIsbnTextInput}
+              disabled={isIsbnProcessing || !isbnTextInput.trim()}
+              className="w-full bg-indigo-600 hover:bg-indigo-700"
+            >
+              {isIsbnProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  查询中...
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4 mr-2" />
+                  开始查询
+                </>
+              )}
+            </Button>
+
+            {isbnImportResults.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>查询结果</Label>
+                  <div className="flex gap-2">
+                    <span className="text-xs text-green-600">
+                      ✓ {isbnImportResults.filter(r => r.status === 'success').length}
+                    </span>
+                    <span className="text-xs text-red-500">
+                      ✗ {isbnImportResults.filter(r => r.status === 'failed').length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="max-h-[200px] overflow-y-auto space-y-1">
+                  {isbnImportResults.map((item, index) => (
+                    <div
+                      key={index}
+                      className={`flex items-center justify-between p-2 rounded-md text-sm ${
+                        item.status === 'success'
+                          ? 'bg-green-50 border border-green-200'
+                          : item.status === 'failed'
+                          ? 'bg-red-50 border border-red-200'
+                          : item.status === 'processing'
+                          ? 'bg-blue-50 border border-blue-200'
+                          : 'bg-gray-50 border border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {item.status === 'processing' && (
+                          <Loader2 className="w-3 h-3 animate-spin text-blue-500 shrink-0" />
+                        )}
+                        {item.status === 'success' && (
+                          <CheckCircle className="w-3 h-3 text-green-500 shrink-0" />
+                        )}
+                        {item.status === 'failed' && (
+                          <XCircle className="w-3 h-3 text-red-500 shrink-0" />
+                        )}
+                        {item.status === 'pending' && (
+                          <span className="w-3 h-3 rounded-full bg-gray-300 shrink-0" />
+                        )}
+                        <span className="truncate font-mono text-xs">{item.isbn}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                        {item.status === 'success' && item.result?.title
+                          ? item.result.title.slice(0, 15)
+                          : item.status === 'failed'
+                          ? item.error || '查询失败'
+                          : item.status === 'processing'
+                          ? '查询中...'
+                          : '等待中'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {isbnImportResults.some(r => r.status === 'success') && !isIsbnProcessing && (
+                  <Button
+                    onClick={handleAddIsbnBooks}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    添加 {isbnImportResults.filter(r => r.status === 'success').length} 本书到图书馆
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsIsbnImportOpen(false);
+              setIsbnTextInput('');
+              setIsbnImportResults([]);
+            }}>
+              关闭
             </Button>
           </DialogFooter>
         </DialogContent>
