@@ -63,7 +63,7 @@ describe('useLibrary Hook', () => {
     
     expect(result.current.state.books).toHaveLength(1)
     expect(result.current.state.books[0].title).toBe('Test Book')
-    expect(result.current.state.statistics.totalBooks).toBe(1)
+    expect(result.current.statistics.totalBooks).toBe(1)
   })
 
   it('应该正确更新书籍', async () => {
@@ -118,7 +118,7 @@ describe('useLibrary Hook', () => {
     })
     
     expect(result.current.state.books).toHaveLength(0)
-    expect(result.current.state.statistics.totalBooks).toBe(0)
+    expect(result.current.statistics.totalBooks).toBe(0)
   })
 
   it('应该正确搜索书籍', async () => {
@@ -186,7 +186,7 @@ describe('useLibrary Hook', () => {
     
     expect(result.current.state.members).toHaveLength(1)
     expect(result.current.state.members[0].name).toBe('张三')
-    expect(result.current.state.statistics.totalMembers).toBe(1)
+    expect(result.current.statistics.totalMembers).toBe(1)
   })
 
   it('应该正确处理借书流程', async () => {
@@ -245,7 +245,7 @@ describe('useLibrary Hook', () => {
     
     expect(result.current.state.borrowRecords).toHaveLength(1)
     expect(result.current.state.borrowRecords[0].status).toBe('borrowed')
-    expect(result.current.state.statistics.currentBorrows).toBe(1)
+    expect(result.current.statistics.currentBorrows).toBe(1)
     
     // 验证库存更新
     const book = result.current.state.books.find(b => b.id === bookId)

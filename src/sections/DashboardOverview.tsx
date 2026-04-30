@@ -48,8 +48,7 @@ function AnimatedNumber({ value, duration = 1000 }: { value: number; duration?: 
 }
 
 export default function DashboardOverview() {
-  const { state } = useLibrary();
-  const { statistics } = state;
+  const { state, statistics } = useLibrary();
   const { 
     stats, 
     warning, 

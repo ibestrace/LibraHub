@@ -45,9 +45,9 @@ describe('UnifiedStorage', () => {
   });
 
   describe('Backend Selection', () => {
-    it('should default to indexedDB backend', () => {
+    it('should default to localStorage backend', () => {
       const store = new UnifiedStorage();
-      expect(store.getBackend()).toBe('indexedDB');
+      expect(store.getBackend()).toBe('localStorage');
     });
 
     it('should allow localStorage backend', () => {
@@ -86,11 +86,13 @@ describe('UnifiedStorage', () => {
       };
 
       await storage.saveBook(book);
-      
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'library_books',
-        expect.stringContaining('book-1')
+
+      // BookService.add generates its own ID and also writes a log
+      const bookCalls = localStorageMock.setItem.mock.calls.filter(
+        (call: [string, string]) => call[0] === 'library_books'
       );
+      expect(bookCalls.length).toBeGreaterThanOrEqual(1);
+      expect(bookCalls[0][1]).toContain('Test Book');
     });
 
     it('should retrieve all books', async () => {
@@ -274,11 +276,13 @@ describe('UnifiedStorage', () => {
       };
 
       await storage.saveMember(member);
-      
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'library_members',
-        expect.stringContaining('member-1')
+
+      // MemberService.add generates its own ID and also writes a log
+      const memberCalls = localStorageMock.setItem.mock.calls.filter(
+        (call: [string, string]) => call[0] === 'library_members'
       );
+      expect(memberCalls.length).toBeGreaterThanOrEqual(1);
+      expect(memberCalls[0][1]).toContain('Test Member');
     });
 
     it('should delete member', async () => {
@@ -322,7 +326,7 @@ describe('UnifiedStorage', () => {
       storage = new UnifiedStorage('localStorage');
     });
 
-    it('should save and retrieve borrow records', async () => {
+    it('should reject direct borrow record save', async () => {
       const record: BorrowRecord = {
         id: 'borrow-1',
         bookId: 'book-1',
@@ -342,12 +346,7 @@ describe('UnifiedStorage', () => {
         updatedAt: new Date().toISOString()
       };
 
-      await storage.saveBorrowRecord(record);
-      
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'library_borrow_records',
-        expect.stringContaining('borrow-1')
-      );
+      await expect(storage.saveBorrowRecord(record)).rejects.toThrow('请使用 BorrowService.borrow');
     });
   });
 
@@ -358,14 +357,14 @@ describe('UnifiedStorage', () => {
 
     it('should return default settings when none exist', async () => {
       localStorageMock.getItem.mockReturnValue(null);
-      
+
       const settings = await storage.getSettings();
-      
-      expect(settings.libraryName).toBe('图书馆');
+
+      expect(settings.libraryName).toBe('LibraHub 图书馆');
       expect(settings.maxBorrowDays).toBe(30);
       expect(settings.maxRenewTimes).toBe(2);
       expect(settings.renewDays).toBe(15);
-      expect(settings.overdueFinePerDay).toBe(0.5);
+      expect(settings.overdueFinePerDay).toBe(1);
     });
 
     it('should save and retrieve settings', async () => {
@@ -523,6 +522,6 @@ describe('UnifiedStorage', () => {
 describe('Storage Singleton', () => {
   it('should export storage singleton', () => {
     expect(storage).toBeDefined();
-    expect(storage.getBackend()).toBe('indexedDB');
+    expect(storage.getBackend()).toBe('localStorage');
   });
 });

@@ -1,6 +1,6 @@
 // 图书馆全局状态管理
 import React, { createContext, useContext, useReducer, useCallback, useEffect, useMemo } from 'react';
-import type { Book, Member, MemberType, BorrowRecord, BookCategory, SystemSettings } from '@/types';
+import type { Book, Member, MemberType, BorrowRecord, BookCategory, SystemSettings, Statistics } from '@/types';
 import {
   BookService,
   MemberService,
@@ -19,52 +19,30 @@ interface LibraryState {
   borrowRecords: BorrowRecord[];
   categories: BookCategory[];
   settings: SystemSettings;
-  statistics: {
-    totalBooks: number;
-    totalMembers: number;
-    activeMembers: number;
-    totalBorrows: number;
-    currentBorrows: number;
-    overdueBorrows: number;
-    todayBorrows: number;
-    todayReturns: number;
-    newMembersThisMonth: number;
-  };
   loading: boolean;
   error: string | null;
 }
 
-  // 初始状态
-  const initialState: LibraryState = {
-    books: [],
-    members: [],
-    memberTypes: [],
-    borrowRecords: [],
-    categories: [],
-    settings: {
-      libraryName: 'LibraHub 图书馆',
-      maxBorrowDays: 30,
-      maxRenewTimes: 2,
-      overdueFinePerDay: 1,
-      allowOverdueBorrow: false
-    } as SystemSettings,
-    statistics: {
-      totalBooks: 0,
-      totalMembers: 0,
-      activeMembers: 0,
-      totalBorrows: 0,
-      currentBorrows: 0,
-      overdueBorrows: 0,
-      todayBorrows: 0,
-      todayReturns: 0,
-      newMembersThisMonth: 0
-    },
-    loading: false,
-    error: null
-  };
+// 初始状态
+const initialState: LibraryState = {
+  books: [],
+  members: [],
+  memberTypes: [],
+  borrowRecords: [],
+  categories: [],
+  settings: {
+    libraryName: 'LibraHub 图书馆',
+    maxBorrowDays: 30,
+    maxRenewTimes: 2,
+    overdueFinePerDay: 1,
+    allowOverdueBorrow: false
+  } as SystemSettings,
+  loading: false,
+  error: null
+};
 
 // Action 类型
-type Action =
+ type Action =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_BOOKS'; payload: Book[] }
@@ -73,11 +51,9 @@ type Action =
   | { type: 'SET_BORROW_RECORDS'; payload: BorrowRecord[] }
   | { type: 'SET_CATEGORIES'; payload: BookCategory[] }
   | { type: 'SET_SETTINGS'; payload: SystemSettings }
-  | { type: 'UPDATE_STATISTICS' }
-  | { type: 'REFRESH_ALL' }
-  | { type: 'INIT_DATA' };
+  | { type: 'SET_ALL_DATA'; payload: Partial<Omit<LibraryState, 'loading' | 'error'>> };
 
-// Reducer
+// Reducer - 纯函数，无副作用
 function libraryReducer(state: LibraryState, action: Action): LibraryState {
   switch (action.type) {
     case 'SET_LOADING':
@@ -96,61 +72,60 @@ function libraryReducer(state: LibraryState, action: Action): LibraryState {
       return { ...state, categories: action.payload };
     case 'SET_SETTINGS':
       return { ...state, settings: action.payload };
-    case 'UPDATE_STATISTICS': {
-      const bookStats = BookService.getStats();
-      const memberStats = MemberService.getStats();
-      const borrowStats = BorrowService.getStats();
-      
-      const now = new Date();
-      const thisMonth = now.getMonth();
-      const thisYear = now.getFullYear();
-      
-      return {
-        ...state,
-        statistics: {
-          totalBooks: bookStats.total,
-          totalMembers: memberStats.total,
-          activeMembers: memberStats.active,
-          totalBorrows: borrowStats.total,
-          currentBorrows: borrowStats.current,
-          overdueBorrows: borrowStats.overdue,
-          todayBorrows: borrowStats.todayBorrows,
-          todayReturns: borrowStats.todayReturns,
-          newMembersThisMonth: state.members.filter(m => {
-            const d = new Date(m.createdAt);
-            return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
-          }).length
-        }
-      };
-    }
-    case 'REFRESH_ALL':
-      return {
-        ...state,
-        books: BookService.getAll(),
-        members: MemberService.getAll(),
-        memberTypes: MemberTypeService.getAll(),
-        borrowRecords: BorrowService.getAll(),
-        categories: CategoryService.getAll(),
-        settings: SettingsService.get()
-      };
-    case 'INIT_DATA':
-      return {
-        ...state,
-        books: BookService.getAll(),
-        members: MemberService.getAll(),
-        memberTypes: MemberTypeService.getAll(),
-        borrowRecords: BorrowService.getAll(),
-        categories: CategoryService.getAll(),
-        settings: SettingsService.get()
-      };
+    case 'SET_ALL_DATA':
+      return { ...state, ...action.payload };
     default:
       return state;
   }
 }
 
-// Context
-interface LibraryContextType {
+// 计算统计数据（纯函数，仅依赖 state 数据）
+function computeStatistics(books: Book[], members: Member[], borrowRecords: BorrowRecord[]): Statistics {
+  const now = new Date();
+  const today = now.toDateString();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+
+  return {
+    totalBooks: books.length,
+    totalMembers: members.length,
+    activeMembers: members.filter(m => m.status === 'active').length,
+    totalBorrows: borrowRecords.length,
+    currentBorrows: borrowRecords.filter(r => r.status === 'borrowed' || r.status === 'overdue').length,
+    overdueBorrows: borrowRecords.filter(r => r.status === 'overdue').length,
+    todayBorrows: borrowRecords.filter(r => new Date(r.borrowDate).toDateString() === today).length,
+    todayReturns: borrowRecords.filter(r => r.returnDate && new Date(r.returnDate).toDateString() === today).length,
+    newMembersThisMonth: members.filter(m => {
+      const d = new Date(m.createdAt);
+      return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+    }).length
+  };
+}
+
+// 加载所有数据的辅助函数（含逾期状态同步副作用）
+function loadAllData(): Partial<Omit<LibraryState, 'loading' | 'error'>> {
+  // BorrowService.getStats 会同步逾期状态到 localStorage
+  BorrowService.getStats();
+  return {
+    books: BookService.getAll(),
+    members: MemberService.getAll(),
+    memberTypes: MemberTypeService.getAll(),
+    borrowRecords: BorrowService.getAll(),
+    categories: CategoryService.getAll(),
+    settings: SettingsService.get()
+  };
+}
+
+// ======== Data Context（数据 + 派生状态）========
+interface LibraryDataContextType {
   state: LibraryState;
+  statistics: Statistics;
+}
+
+const LibraryDataContext = createContext<LibraryDataContextType | undefined>(undefined);
+
+// ======== Actions Context（操作方法 + dispatch）========
+interface LibraryActionsContextType {
   dispatch: React.Dispatch<Action>;
   // 书籍操作
   addBook: (book: Omit<Book, 'id' | 'createdAt' | 'updatedAt' | 'borrowCount'>) => Promise<Book>;
@@ -179,22 +154,27 @@ interface LibraryContextType {
   exportData: () => string;
   importData: (data: string) => boolean;
   refreshData: () => void;
-  // 辅助方法
+  // 辅助方法（依赖 state，放在 actions context 中通过闭包访问）
   getBookById: (id: string) => Book | undefined;
   getMemberById: (id: string) => Member | undefined;
   getCategoryById: (id: string) => BookCategory | undefined;
 }
 
-const LibraryContext = createContext<LibraryContextType | undefined>(undefined);
+const LibraryActionsContext = createContext<LibraryActionsContextType | undefined>(undefined);
 
 // Provider
 export function LibraryProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(libraryReducer, initialState);
 
+  // 统计数据派生计算
+  const statistics = useMemo(
+    () => computeStatistics(state.books, state.members, state.borrowRecords),
+    [state.books, state.members, state.borrowRecords]
+  );
+
   // 初始化数据
   useEffect(() => {
-    dispatch({ type: 'INIT_DATA' });
-    dispatch({ type: 'UPDATE_STATISTICS' });
+    dispatch({ type: 'SET_ALL_DATA', payload: loadAllData() });
   }, []);
 
   // 书籍操作
@@ -203,7 +183,6 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     try {
       const newBook = BookService.add(book);
       dispatch({ type: 'SET_BOOKS', payload: BookService.getAll() });
-      dispatch({ type: 'UPDATE_STATISTICS' });
       return newBook;
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '添加失败' });
@@ -218,7 +197,6 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     try {
       const book = BookService.update(id, updates);
       dispatch({ type: 'SET_BOOKS', payload: BookService.getAll() });
-      dispatch({ type: 'UPDATE_STATISTICS' });
       return book;
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '更新失败' });
@@ -233,7 +211,6 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = BookService.delete(id);
       dispatch({ type: 'SET_BOOKS', payload: BookService.getAll() });
-      dispatch({ type: 'UPDATE_STATISTICS' });
       return result;
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '删除失败' });
@@ -261,7 +238,6 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     try {
       const newMember = MemberService.add(member);
       dispatch({ type: 'SET_MEMBERS', payload: MemberService.getAll() });
-      dispatch({ type: 'UPDATE_STATISTICS' });
       return newMember;
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '添加失败' });
@@ -276,7 +252,6 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     try {
       const member = MemberService.update(id, updates);
       dispatch({ type: 'SET_MEMBERS', payload: MemberService.getAll() });
-      dispatch({ type: 'UPDATE_STATISTICS' });
       return member;
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '更新失败' });
@@ -291,7 +266,6 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = MemberService.delete(id);
       dispatch({ type: 'SET_MEMBERS', payload: MemberService.getAll() });
-      dispatch({ type: 'UPDATE_STATISTICS' });
       return result;
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '删除失败' });
@@ -321,7 +295,6 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_BORROW_RECORDS', payload: BorrowService.getAll() });
       dispatch({ type: 'SET_BOOKS', payload: BookService.getAll() });
       dispatch({ type: 'SET_MEMBERS', payload: MemberService.getAll() });
-      dispatch({ type: 'UPDATE_STATISTICS' });
       return record;
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '借阅失败' });
@@ -338,7 +311,6 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_BORROW_RECORDS', payload: BorrowService.getAll() });
       dispatch({ type: 'SET_BOOKS', payload: BookService.getAll() });
       dispatch({ type: 'SET_MEMBERS', payload: MemberService.getAll() });
-      dispatch({ type: 'UPDATE_STATISTICS' });
       return record;
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '归还失败' });
@@ -404,20 +376,23 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   const importData = useCallback((data: string) => {
     const result = StorageService.importAll(data);
     if (result) {
-      dispatch({ type: 'REFRESH_ALL' });
-      dispatch({ type: 'UPDATE_STATISTICS' });
+      dispatch({ type: 'SET_ALL_DATA', payload: loadAllData() });
     }
     return result;
   }, []);
 
   const refreshData = useCallback(() => {
-    dispatch({ type: 'REFRESH_ALL' });
-    dispatch({ type: 'UPDATE_STATISTICS' });
+    dispatch({ type: 'SET_ALL_DATA', payload: loadAllData() });
   }, []);
 
-  // 优化：使用 useMemo 缓存计算结果
-  const value: LibraryContextType = useMemo(() => ({
+  // Data context value — 仅在 state/statistics 变化时更新
+  const dataValue = useMemo(() => ({
     state,
+    statistics
+  }), [state, statistics]);
+
+  // Actions context value — 大部分方法稳定，不依赖 state
+  const actionsValue = useMemo(() => ({
     dispatch,
     addBook,
     updateBook,
@@ -444,7 +419,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     importData,
     refreshData
   }), [
-    state,
+    dispatch,
     addBook,
     updateBook,
     deleteBook,
@@ -472,17 +447,38 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   ]);
 
   return (
-    <LibraryContext.Provider value={value}>
-      {children}
-    </LibraryContext.Provider>
+    <LibraryDataContext.Provider value={dataValue}>
+      <LibraryActionsContext.Provider value={actionsValue}>
+        {children}
+      </LibraryActionsContext.Provider>
+    </LibraryDataContext.Provider>
   );
 }
 
-// Hook
+// 组合 Hook（向后兼容）
 export function useLibrary() {
-  const context = useContext(LibraryContext);
-  if (context === undefined) {
+  const data = useContext(LibraryDataContext);
+  const actions = useContext(LibraryActionsContext);
+  if (data === undefined || actions === undefined) {
     throw new Error('useLibrary must be used within a LibraryProvider');
+  }
+  return { ...data, ...actions };
+}
+
+// 仅订阅数据的 Hook（性能优化：不随操作方法变化而重渲染）
+export function useLibraryData() {
+  const context = useContext(LibraryDataContext);
+  if (context === undefined) {
+    throw new Error('useLibraryData must be used within a LibraryProvider');
+  }
+  return context;
+}
+
+// 仅订阅操作方法的 Hook（性能优化：不随 state 变化而重渲染）
+export function useLibraryActions() {
+  const context = useContext(LibraryActionsContext);
+  if (context === undefined) {
+    throw new Error('useLibraryActions must be used within a LibraryProvider');
   }
   return context;
 }

@@ -36,8 +36,7 @@ import { SetPasswordModal } from '@/components/SetPasswordModal';
 import type { Book } from '@/types';
 
 export default function DataManagement() {
-  const { state, exportData, importData, addBook } = useLibrary();
-  const { statistics } = state;
+  const { state, statistics, exportData, importData, addBook } = useLibrary();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 弹窗状态
