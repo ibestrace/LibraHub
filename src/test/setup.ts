@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
-import { afterEach, beforeEach, vi } from 'vitest'
+import { afterEach, vi } from 'vitest'
 
 // 模拟 localStorage - 使用真实实现
 const localStorageMock = (function() {
@@ -61,7 +61,9 @@ Object.defineProperty(globalThis, 'indexedDB', {
   configurable: true,
 });
 
-// 重置 localStorage 模拟
-beforeEach(() => {
+// 每次测试后清理 DOM 和 localStorage
+afterEach(() => {
+  cleanup();
   localStorageMock.clear();
+  vi.clearAllMocks();
 });

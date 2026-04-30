@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   StorageService,
-  StorageAdapter,
-  STORES,
   BookService,
   MemberService,
   MemberTypeService,
   BorrowService,
   SettingsService,
 } from './storage'
+import { StorageAdapter } from './storageAdapter'
+import { STORES } from './indexedDb'
 
 // 模拟 localStorage
 const mockLocalStorage = {
@@ -146,7 +146,7 @@ describe('BookService', () => {
 
     await BookService.add(book1)
 
-    await expect(BookService.add(book1)).rejects.toThrow('条形码已存在')
+    expect(() => BookService.add(book1)).toThrow('条形码已存在')
   })
 
   it('应该正确搜索书籍', async () => {
@@ -377,11 +377,11 @@ describe('BorrowService', () => {
       status: 'borrowed' as const,
     })
 
-    await expect(BorrowService.borrow({
+    expect(() => BorrowService.borrow({
       bookId: book.id,
       memberId: member.id,
       operator: 'admin',
-    })).rejects.toThrow('该书籍不可借阅')
+    })).toThrow('该书籍不可借阅')
   })
 
   it('应该在会员达到借阅上限时抛出错误', async () => {
@@ -431,11 +431,11 @@ describe('BorrowService', () => {
     })
 
     // 再借一本应该失败
-    await expect(BorrowService.borrow({
+    expect(() => BorrowService.borrow({
       bookId: book1.id,
       memberId: member.id,
       operator: 'admin',
-    })).rejects.toThrow('已达到最大借阅数量限制')
+    })).toThrow('已达到最大借阅数量限制')
   })
 
   it('应该成功还书', async () => {
@@ -580,10 +580,10 @@ describe('BorrowService', () => {
     })
 
     // 续借应该失败（因为 renewTimes = 0）
-    await expect(BorrowService.renew({
+    expect(() => BorrowService.renew({
       recordId: record2.id,
       operator: 'admin',
-    })).rejects.toThrow('已达到最大续借次数')
+    })).toThrow('已达到最大续借次数')
   })
 })
 

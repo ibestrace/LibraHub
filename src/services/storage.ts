@@ -37,10 +37,10 @@ class StorageService {
   static get<T>(key: string, defaultValue: T): T {
     try {
       const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : defaultValue;
+      return data ? JSON.parse(data) : JSON.parse(JSON.stringify(defaultValue));
     } catch (error) {
       console.error(`Error reading ${key}:`, error);
-      return defaultValue;
+      return JSON.parse(JSON.stringify(defaultValue));
     }
   }
 
@@ -105,18 +105,62 @@ class StorageService {
   }
 }
 
-// 书籍相关操作
-export class BookService {
-  // 获取所有书籍
-  static getAll(): Book[] {
-    return StorageService.get<Book[]>(STORAGE_KEYS.BOOKS, []);
+// 基础 CRUD 服务
+class BaseCrudService<T extends { id: string }> {
+  constructor(
+    protected key: string,
+    protected defaultData: T[] = []
+  ) {}
+
+  getAll(): T[] {
+    return StorageService.get<T[]>(this.key, this.defaultData);
   }
 
-  // 根据ID获取书籍
-  static getById(id: string): Book | undefined {
-    const books = this.getAll();
-    return books.find(b => b.id === id);
+  getById(id: string): T | undefined {
+    return this.getAll().find(item => item.id === id);
   }
+
+  protected getItems(): T[] {
+    return this.getAll();
+  }
+
+  protected setItems(items: T[]): void {
+    StorageService.set(this.key, items);
+  }
+
+  protected updateById(id: string, updates: Partial<T>): T | null {
+    const items = this.getItems();
+    const index = items.findIndex(item => item.id === id);
+    if (index === -1) return null;
+
+    items[index] = {
+      ...items[index],
+      ...updates,
+      updatedAt: new Date().toISOString()
+    } as T;
+
+    this.setItems(items);
+    return items[index];
+  }
+
+  protected deleteById(id: string): T | null {
+    const items = this.getItems();
+    const index = items.findIndex(item => item.id === id);
+    if (index === -1) return null;
+
+    const deleted = items[index];
+    items.splice(index, 1);
+    this.setItems(items);
+    return deleted;
+  }
+}
+
+// 书籍相关操作
+export class BookService {
+  private static base = new BaseCrudService<Book>(STORAGE_KEYS.BOOKS);
+
+  static getAll(): Book[] { return BookService.base.getAll(); }
+  static getById(id: string): Book | undefined { return BookService.base.getById(id); }
 
   // 根据条形码获取书籍
   static getByBarcode(barcode: string): Book | undefined {
@@ -191,50 +235,40 @@ export class BookService {
 
   // 更新书籍
   static update(id: string, updates: Partial<Book>): Book | null {
-    const books = this.getAll();
-    const index = books.findIndex(b => b.id === id);
-    
-    if (index === -1) return null;
-    
     // 检查条形码冲突
-    if (updates.barcode && updates.barcode !== books[index].barcode) {
-      if (books.some(b => b.barcode === updates.barcode && b.id !== id)) {
-        throw new Error('条形码已存在');
+    if (updates.barcode) {
+      const current = this.getById(id);
+      if (current && updates.barcode !== current.barcode) {
+        const books = this.getAll();
+        if (books.some(b => b.barcode === updates.barcode && b.id !== id)) {
+          throw new Error('条形码已存在');
+        }
       }
     }
-    
-    books[index] = {
-      ...books[index],
-      ...updates,
-      updatedAt: new Date().toISOString()
-    };
-    
-    StorageService.set(STORAGE_KEYS.BOOKS, books);
-    
-    LogService.add('book', '更新书籍', id, books[index].title, `更新书籍《${books[index].title}》`);
-    
-    return books[index];
+
+    const result = BookService.base['updateById'](id, updates);
+    if (result) {
+      LogService.add('book', '更新书籍', id, result.title, `更新书籍《${result.title}》`);
+    }
+    return result;
   }
 
   // 删除书籍
   static delete(id: string): boolean {
-    const books = this.getAll();
-    const book = books.find(b => b.id === id);
-    
+    const book = this.getById(id);
     if (!book) return false;
-    
+
     // 检查是否有未归还的借阅
     const borrowRecords = BorrowService.getAll();
     if (borrowRecords.some(r => r.bookId === id && r.status === 'borrowed')) {
       throw new Error('该书籍有未归还的借阅记录，无法删除');
     }
-    
-    const filtered = books.filter(b => b.id !== id);
-    StorageService.set(STORAGE_KEYS.BOOKS, filtered);
-    
-    LogService.add('book', '删除书籍', id, book.title, `删除书籍《${book.title}》`);
-    
-    return true;
+
+    const result = BookService.base['deleteById'](id);
+    if (result) {
+      LogService.add('book', '删除书籍', id, book.title, `删除书籍《${book.title}》`);
+    }
+    return !!result;
   }
 
   // 获取书籍统计
@@ -252,13 +286,10 @@ export class BookService {
 
 // 会员相关操作
 export class MemberService {
-  static getAll(): Member[] {
-    return StorageService.get<Member[]>(STORAGE_KEYS.MEMBERS, []);
-  }
+  private static base = new BaseCrudService<Member>(STORAGE_KEYS.MEMBERS);
 
-  static getById(id: string): Member | undefined {
-    return this.getAll().find(m => m.id === id);
-  }
+  static getAll(): Member[] { return MemberService.base.getAll(); }
+  static getById(id: string): Member | undefined { return MemberService.base.getById(id); }
 
   static getByCardNumber(cardNumber: string): Member | undefined {
     return this.getAll().find(m => m.cardNumber === cardNumber);
@@ -270,34 +301,34 @@ export class MemberService {
     memberTypeId?: string;
   }): Member[] {
     let members = this.getAll();
-    
+
     if (params.keyword) {
       const kw = params.keyword.toLowerCase();
-      members = members.filter(m => 
+      members = members.filter(m =>
         m.name.toLowerCase().includes(kw) ||
         m.cardNumber.toLowerCase().includes(kw) ||
         m.phone.includes(kw)
       );
     }
-    
+
     if (params.status) {
       members = members.filter(m => m.status === params.status);
     }
-    
+
     if (params.memberTypeId) {
       members = members.filter(m => m.memberType.id === params.memberTypeId);
     }
-    
+
     return members;
   }
 
   static add(member: Omit<Member, 'id' | 'createdAt' | 'updatedAt' | 'currentBorrowCount' | 'totalReadingWords'>): Member {
     const members = this.getAll();
-    
+
     if (members.some(m => m.cardNumber === member.cardNumber)) {
       throw new Error('会员卡号已存在');
     }
-    
+
     const newMember: Member = {
       ...member,
       id: `member_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -306,58 +337,48 @@ export class MemberService {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    
+
     members.push(newMember);
-    StorageService.set(STORAGE_KEYS.MEMBERS, members);
-    
+    MemberService.base['setItems'](members);
+
     LogService.add('member', '添加会员', newMember.id, newMember.name, `添加会员 ${newMember.name}`);
-    
+
     return newMember;
   }
 
   static update(id: string, updates: Partial<Member>): Member | null {
-    const members = this.getAll();
-    const index = members.findIndex(m => m.id === id);
-    
-    if (index === -1) return null;
-    
-    if (updates.cardNumber && updates.cardNumber !== members[index].cardNumber) {
-      if (members.some(m => m.cardNumber === updates.cardNumber && m.id !== id)) {
-        throw new Error('会员卡号已存在');
+    if (updates.cardNumber) {
+      const current = this.getById(id);
+      if (current && updates.cardNumber !== current.cardNumber) {
+        const members = this.getAll();
+        if (members.some(m => m.cardNumber === updates.cardNumber && m.id !== id)) {
+          throw new Error('会员卡号已存在');
+        }
       }
     }
-    
-    members[index] = {
-      ...members[index],
-      ...updates,
-      updatedAt: new Date().toISOString()
-    };
-    
-    StorageService.set(STORAGE_KEYS.MEMBERS, members);
-    
-    LogService.add('member', '更新会员', id, members[index].name, `更新会员 ${members[index].name}`);
-    
-    return members[index];
+
+    const result = MemberService.base['updateById'](id, updates);
+    if (result) {
+      LogService.add('member', '更新会员', id, result.name, `更新会员 ${result.name}`);
+    }
+    return result;
   }
 
   static delete(id: string): boolean {
-    const members = this.getAll();
-    const member = members.find(m => m.id === id);
-    
+    const member = this.getById(id);
     if (!member) return false;
-    
+
     // 检查是否有未归还的借阅
     const borrowRecords = BorrowService.getAll();
     if (borrowRecords.some(r => r.memberId === id && r.status === 'borrowed')) {
       throw new Error('该会员有未归还的借阅记录，无法删除');
     }
-    
-    const filtered = members.filter(m => m.id !== id);
-    StorageService.set(STORAGE_KEYS.MEMBERS, filtered);
-    
-    LogService.add('member', '删除会员', id, member.name, `删除会员 ${member.name}`);
-    
-    return true;
+
+    const result = MemberService.base['deleteById'](id);
+    if (result) {
+      LogService.add('member', '删除会员', id, member.name, `删除会员 ${member.name}`);
+    }
+    return !!result;
   }
 
   static getStats() {
@@ -371,44 +392,43 @@ export class MemberService {
   }
 }
 
+const DEFAULT_MEMBER_TYPES: MemberType[] = [
+  {
+    id: 'default_normal',
+    name: '普通会员',
+    durationMonths: 12,
+    maxBorrowCount: 5,
+    maxBorrowDays: 30,
+    renewTimes: 2,
+    renewDays: 15,
+    depositAmount: 100,
+    fee: 50,
+    description: '普通会员，可借5本书，借期30天',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'default_vip',
+    name: 'VIP会员',
+    durationMonths: 12,
+    maxBorrowCount: 10,
+    maxBorrowDays: 60,
+    renewTimes: 3,
+    renewDays: 30,
+    depositAmount: 200,
+    fee: 200,
+    description: 'VIP会员，可借10本书，借期60天',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
 // 会员类型操作
 export class MemberTypeService {
-  static getAll(): MemberType[] {
-    return StorageService.get<MemberType[]>(STORAGE_KEYS.MEMBER_TYPES, [
-      {
-        id: 'default_normal',
-        name: '普通会员',
-        durationMonths: 12,
-        maxBorrowCount: 5,
-        maxBorrowDays: 30,
-        renewTimes: 2,
-        renewDays: 15,
-        depositAmount: 100,
-        fee: 50,
-        description: '普通会员，可借5本书，借期30天',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      },
-      {
-        id: 'default_vip',
-        name: 'VIP会员',
-        durationMonths: 12,
-        maxBorrowCount: 10,
-        maxBorrowDays: 60,
-        renewTimes: 3,
-        renewDays: 30,
-        depositAmount: 200,
-        fee: 200,
-        description: 'VIP会员，可借10本书，借期60天',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-    ]);
-  }
+  private static base = new BaseCrudService<MemberType>(STORAGE_KEYS.MEMBER_TYPES, DEFAULT_MEMBER_TYPES);
 
-  static getById(id: string): MemberType | undefined {
-    return this.getAll().find(t => t.id === id);
-  }
+  static getAll(): MemberType[] { return MemberTypeService.base.getAll(); }
+  static getById(id: string): MemberType | undefined { return MemberTypeService.base.getById(id); }
 
   static add(type: Omit<MemberType, 'id' | 'createdAt' | 'updatedAt'>): MemberType {
     const types = this.getAll();
@@ -419,36 +439,21 @@ export class MemberTypeService {
       updatedAt: new Date().toISOString()
     };
     types.push(newType);
-    StorageService.set(STORAGE_KEYS.MEMBER_TYPES, types);
+    MemberTypeService.base['setItems'](types);
     return newType;
   }
 
   static update(id: string, updates: Partial<MemberType>): MemberType | null {
-    const types = this.getAll();
-    const index = types.findIndex(t => t.id === id);
-    if (index === -1) return null;
-    
-    types[index] = {
-      ...types[index],
-      ...updates,
-      updatedAt: new Date().toISOString()
-    };
-    StorageService.set(STORAGE_KEYS.MEMBER_TYPES, types);
-    return types[index];
+    return MemberTypeService.base['updateById'](id, updates);
   }
 
   static delete(id: string): boolean {
-    const types = this.getAll();
     const members = MemberService.getAll();
-    
     // 检查是否有会员使用此类型
     if (members.some(m => m.memberType.id === id)) {
       throw new Error('有会员正在使用此类型，无法删除');
     }
-    
-    const filtered = types.filter(t => t.id !== id);
-    StorageService.set(STORAGE_KEYS.MEMBER_TYPES, filtered);
-    return true;
+    return !!MemberTypeService.base['deleteById'](id);
   }
 }
 
@@ -738,24 +743,23 @@ export class BorrowService {
   }
 }
 
+const DEFAULT_CATEGORIES: BookCategory[] = [
+  { id: 'cat_1', name: '文学', code: 'WX', description: '文学作品', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'cat_2', name: '历史', code: 'LS', description: '历史书籍', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'cat_3', name: '科技', code: 'KJ', description: '科技书籍', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'cat_4', name: '艺术', code: 'YS', description: '艺术书籍', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'cat_5', name: '教育', code: 'JY', description: '教育书籍', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'cat_6', name: '经济', code: 'JJ', description: '经济书籍', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'cat_7', name: '哲学', code: 'ZX', description: '哲学书籍', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'cat_8', name: '其他', code: 'QT', description: '其他类别', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+];
+
 // 分类操作
 export class CategoryService {
-  static getAll(): BookCategory[] {
-    return StorageService.get<BookCategory[]>(STORAGE_KEYS.CATEGORIES, [
-      { id: 'cat_1', name: '文学', code: 'WX', description: '文学作品', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-      { id: 'cat_2', name: '历史', code: 'LS', description: '历史书籍', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-      { id: 'cat_3', name: '科技', code: 'KJ', description: '科技书籍', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-      { id: 'cat_4', name: '艺术', code: 'YS', description: '艺术书籍', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-      { id: 'cat_5', name: '教育', code: 'JY', description: '教育书籍', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-      { id: 'cat_6', name: '经济', code: 'JJ', description: '经济书籍', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-      { id: 'cat_7', name: '哲学', code: 'ZX', description: '哲学书籍', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-      { id: 'cat_8', name: '其他', code: 'QT', description: '其他类别', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-    ]);
-  }
+  private static base = new BaseCrudService<BookCategory>(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES);
 
-  static getById(id: string): BookCategory | undefined {
-    return this.getAll().find(c => c.id === id);
-  }
+  static getAll(): BookCategory[] { return CategoryService.base.getAll(); }
+  static getById(id: string): BookCategory | undefined { return CategoryService.base.getById(id); }
 
   static add(category: Omit<BookCategory, 'id' | 'createdAt' | 'updatedAt'>): BookCategory {
     const categories = this.getAll();
@@ -766,35 +770,20 @@ export class CategoryService {
       updatedAt: new Date().toISOString()
     };
     categories.push(newCategory);
-    StorageService.set(STORAGE_KEYS.CATEGORIES, categories);
+    CategoryService.base['setItems'](categories);
     return newCategory;
   }
 
   static update(id: string, updates: Partial<BookCategory>): BookCategory | null {
-    const categories = this.getAll();
-    const index = categories.findIndex(c => c.id === id);
-    if (index === -1) return null;
-    
-    categories[index] = {
-      ...categories[index],
-      ...updates,
-      updatedAt: new Date().toISOString()
-    };
-    StorageService.set(STORAGE_KEYS.CATEGORIES, categories);
-    return categories[index];
+    return CategoryService.base['updateById'](id, updates);
   }
 
   static delete(id: string): boolean {
-    const categories = this.getAll();
     const books = BookService.getAll();
-    
     if (books.some(b => b.categoryId === id)) {
       throw new Error('该分类下有书籍，无法删除');
     }
-    
-    const filtered = categories.filter(c => c.id !== id);
-    StorageService.set(STORAGE_KEYS.CATEGORIES, filtered);
-    return true;
+    return !!CategoryService.base['deleteById'](id);
   }
 }
 
@@ -864,79 +853,66 @@ export class SettingsService {
 
 // 会员分组操作
 export class MemberGroupService {
-  static getAll(): MemberGroup[] {
-    return StorageService.get<MemberGroup[]>(STORAGE_KEYS.MEMBER_GROUPS, []);
-  }
+  private static base = new BaseCrudService<MemberGroup>(STORAGE_KEYS.MEMBER_GROUPS);
 
-  static getById(id: string): MemberGroup | undefined {
-    const groups = this.getAll();
-    return groups.find(g => g.id === id);
-  }
+  static getAll(): MemberGroup[] { return MemberGroupService.base.getAll(); }
+  static getById(id: string): MemberGroup | undefined { return MemberGroupService.base.getById(id); }
 
   static add(group: Omit<MemberGroup, 'id' | 'createdAt' | 'updatedAt'>): MemberGroup {
     const groups = this.getAll();
-    
+
     // 检查名称是否重复
     if (groups.some(g => g.name === group.name)) {
       throw new Error('分组名称已存在');
     }
-    
+
     const newGroup: MemberGroup = {
       ...group,
       id: `group_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    
+
     groups.push(newGroup);
-    StorageService.set(STORAGE_KEYS.MEMBER_GROUPS, groups);
-    
+    MemberGroupService.base['setItems'](groups);
+
     LogService.add('system', '创建分组', newGroup.id, newGroup.name);
     return newGroup;
   }
 
   static update(id: string, updates: Partial<MemberGroup>): MemberGroup {
-    const groups = this.getAll();
-    const index = groups.findIndex(g => g.id === id);
-    
-    if (index === -1) throw new Error('分组不存在');
-    
-    // 检查名称是否重复
-    if (updates.name && updates.name !== groups[index].name) {
-      if (groups.some(g => g.name === updates.name)) {
-        throw new Error('分组名称已存在');
+    if (updates.name) {
+      const current = this.getById(id);
+      if (current && updates.name !== current.name) {
+        const groups = this.getAll();
+        if (groups.some(g => g.name === updates.name)) {
+          throw new Error('分组名称已存在');
+        }
       }
     }
-    
-    groups[index] = {
-      ...groups[index],
-      ...updates,
-      updatedAt: new Date().toISOString()
-    };
-    
-    StorageService.set(STORAGE_KEYS.MEMBER_GROUPS, groups);
-    LogService.add('system', '更新分组', id, groups[index].name);
-    
-    return groups[index];
+
+    const result = MemberGroupService.base['updateById'](id, updates);
+    if (!result) throw new Error('分组不存在');
+
+    LogService.add('system', '更新分组', id, result.name);
+    return result;
   }
 
   static delete(id: string): boolean {
-    const groups = this.getAll();
-    const group = groups.find(g => g.id === id);
-    
+    const group = this.getById(id);
     if (!group) throw new Error('分组不存在');
-    
+
     // 检查是否有会员在该分组
     const members = MemberService.getAll();
     if (members.some(m => m.groupId === id)) {
       throw new Error('该分组下有会员，无法删除');
     }
-    
-    const filtered = groups.filter(g => g.id !== id);
-    StorageService.set(STORAGE_KEYS.MEMBER_GROUPS, filtered);
-    
-    LogService.add('system', '删除分组', id, group.name);
-    return true;
+
+    const result = MemberGroupService.base['deleteById'](id);
+    if (result) {
+      LogService.add('system', '删除分组', id, group.name);
+    }
+    return !!result;
   }
 }
 
